@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const path = require('path');
 require('dotenv').config();
 
 const db = require('./src/config/db');
@@ -27,9 +28,20 @@ app.use(express.urlencoded({ extended: true }));
 const { swaggerUi, swaggerDocument } = require('./src/config/swagger');
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(__dirname, 'public')));
+
 // Serve API endpoints at both root and /api for consistency with specifications
 app.use('/api', apiRoutes);
 app.use('/', apiRoutes);
+
+// Fallback all other non-API requests to the web client's index.html (SPA routing)
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api') || req.path === '/health' || req.path.startsWith('/api-docs')) {
+    return next();
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Health Check Endpoint
 app.get('/health', async (req, res) => {
