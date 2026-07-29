@@ -4,8 +4,19 @@ require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET || 'default_jwt_secret_key_antigravity';
 
 const authenticateToken = (req, res, next) => {
+  let token;
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (authHeader) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query) {
+    if (req.query.token) {
+      token = req.query.token;
+    } else if (req.query.Authorization) {
+      const parts = req.query.Authorization.split(' ');
+      token = parts[1] || parts[0];
+    }
+  }
 
   if (!token) {
     return res.status(401).json({ error: 'Access token required' });

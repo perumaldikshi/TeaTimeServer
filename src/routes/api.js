@@ -45,6 +45,7 @@ router.get('/monthly-report', authenticateToken, isAdmin, (req, res, next) => {
 router.get('/reports', authenticateToken, isAdmin, reportController.getReport);
 router.get('/download-pdf', authenticateToken, isAdmin, reportController.downloadPdf);
 router.get('/download-excel', authenticateToken, isAdmin, reportController.downloadExcel);
+router.delete('/order/:id', authenticateToken, isAdmin, orderController.deleteOrder);
 
 // --- PUSH NOTIFICATIONS ---
 router.post('/send-notification', authenticateToken, isAdmin, notificationService.sendManualNotification);

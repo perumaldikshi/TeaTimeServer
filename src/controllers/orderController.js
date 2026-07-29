@@ -431,3 +431,20 @@ exports.updateTodayOrder = async (req, res, next) => {
   }
 };
 
+// 7. Delete an order record (Admin Only)
+exports.deleteOrder = async (req, res, next) => {
+  const orderId = req.params.id;
+  try {
+    const result = await db.query('DELETE FROM tea_orders WHERE id = $1 RETURNING *', [orderId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    res.json({
+      message: 'Order record deleted successfully',
+      order: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
