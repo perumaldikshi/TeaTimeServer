@@ -26,6 +26,7 @@ router.put('/employees/:id', authenticateToken, isAdmin, adminController.updateE
 router.get('/tea-items', authenticateToken, adminController.getTeaItems);
 router.post('/tea-items', authenticateToken, isAdmin, adminController.createTeaItem);
 router.put('/tea-items/:id', authenticateToken, isAdmin, adminController.updateTeaItem);
+router.delete('/tea-items/:id', authenticateToken, isAdmin, adminController.deleteTeaItem);
 
 // --- SETTINGS (Admin Only) ---
 router.put('/settings', authenticateToken, isAdmin, adminController.updateSettings);
