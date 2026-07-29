@@ -21,6 +21,7 @@ router.get('/dashboard', authenticateToken, orderController.getDashboard);
 router.get('/employees', authenticateToken, isAdmin, adminController.getEmployees);
 router.post('/employees', authenticateToken, isAdmin, adminController.createEmployee);
 router.put('/employees/:id', authenticateToken, isAdmin, adminController.updateEmployee);
+router.delete('/employees/:id', authenticateToken, isAdmin, adminController.deleteEmployee);
 
 // --- TEA ITEM MASTER (Prices & Availability) ---
 router.get('/tea-items', authenticateToken, adminController.getTeaItems);
@@ -34,6 +35,7 @@ router.put('/settings', authenticateToken, isAdmin, adminController.updateSettin
 // --- ORDERS ---
 router.post('/order', authenticateToken, isEmployee, orderController.placeOrder);
 router.put('/order', authenticateToken, isEmployee, orderController.updateTodayOrder); // Update or Cancel today's order
+router.put('/order/:id/cancel', authenticateToken, orderController.cancelOrder);
 router.get('/today-orders', authenticateToken, orderController.getTodayOrders);
 router.get('/history', authenticateToken, orderController.getOrderHistory);
 

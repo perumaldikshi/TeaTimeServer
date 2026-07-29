@@ -209,3 +209,20 @@ exports.deleteTeaItem = async (req, res, next) => {
     next(error);
   }
 };
+
+// 5. Delete Employee Account (Admin Only)
+exports.deleteEmployee = async (req, res, next) => {
+  const { id } = req.params;
+  try {
+    const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING id, name, email', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
+    res.json({
+      message: 'Employee account deleted successfully',
+      employee: result.rows[0]
+    });
+  } catch (error) {
+    next(error);
+  }
+};
