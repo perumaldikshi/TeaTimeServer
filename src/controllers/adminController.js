@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
+const cronService = require('../services/cronService');
 
 // 1. Employees Management
 exports.getEmployees = async (req, res, next) => {
@@ -175,6 +176,11 @@ exports.updateSettings = async (req, res, next) => {
     if (isOrderingOpen !== undefined) {
       const openVal = isOrderingOpen ? 'true' : 'false';
       await db.query('INSERT INTO settings (key, value) VALUES (\'is_ordering_open\', $1) ON CONFLICT (key) DO UPDATE SET value = $1', [openVal]);
+    }
+
+    if (teaTimeStart || cutoffTime) {
+      // Trigger a rescheduling of the background cron jobs with the new times
+      await cronService.rescheduleJobs();
     }
 
     // Return the updated settings

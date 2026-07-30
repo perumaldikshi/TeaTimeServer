@@ -6,6 +6,7 @@ const orderController = require('../controllers/orderController');
 const adminController = require('../controllers/adminController');
 const reportController = require('../controllers/reportController');
 const notificationService = require('../services/notificationService');
+const cronController = require('../controllers/cronController');
 
 const { authenticateToken, isAdmin, isEmployee } = require('../middleware/auth');
 
@@ -53,5 +54,10 @@ router.delete('/order/:id', authenticateToken, isAdmin, orderController.deleteOr
 // --- PUSH NOTIFICATIONS ---
 router.post('/send-notification', authenticateToken, isAdmin, notificationService.sendManualNotification);
 router.get('/notifications', authenticateToken, notificationService.getUserNotifications);
+
+// --- AUTOMATED CRONS (Vercel/External Scheduler compatibility) ---
+router.get('/cron/start', cronController.triggerStart);
+router.get('/cron/end', cronController.triggerEnd);
+router.get('/cron/tick', cronController.triggerTick);
 
 module.exports = router;

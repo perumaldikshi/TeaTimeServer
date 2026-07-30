@@ -1,5 +1,20 @@
 const db = require('../config/db');
 
+// Get current time in minutes in the target local timezone
+const getLocalTimeVal = () => {
+  const tz = process.env.TZ || 'Asia/Kolkata';
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(new Date());
+  const hour = parseInt(parts.find(p => p.type === 'hour').value, 10) % 24;
+  const minute = parseInt(parts.find(p => p.type === 'minute').value, 10);
+  return hour * 60 + minute;
+};
+
 // Helper function to check if ordering is open
 const isOrderingOpen = async () => {
   try {
@@ -14,10 +29,7 @@ const isOrderingOpen = async () => {
       return { open: true, message: 'Ordering is open (Manual Override)' };
     }
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMin = now.getMinutes();
-    const currentTimeVal = currentHour * 60 + currentMin; // time in minutes
+    const currentTimeVal = getLocalTimeVal();
 
     // Parse start and cutoff times (Format expected: HH:MM)
     const [startH, startM] = (settings['tea_time_start'] || '16:55').split(':').map(Number);
