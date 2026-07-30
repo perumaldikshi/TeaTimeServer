@@ -4,7 +4,8 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_jwt_secret_key_antigravity';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const rawExpiresIn = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN = /^\d+$/.test(rawExpiresIn) ? parseInt(rawExpiresIn, 10) : rawExpiresIn;
 
 exports.register = async (req, res, next) => {
   const { name, email, password, role, department } = req.body;
