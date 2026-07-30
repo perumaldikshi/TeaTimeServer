@@ -77,7 +77,8 @@ exports.login = async (req, res, next) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      department: user.department
+      department: user.department,
+      token_version: user.token_version || 1
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
@@ -105,6 +106,16 @@ exports.updateFcmToken = async (req, res, next) => {
     }
     await db.query('UPDATE users SET fcm_token = $1 WHERE id = $2', [fcmToken, userId]);
     res.json({ message: 'FCM Token updated successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.logoutAll = async (req, res, next) => {
+  const userId = req.user.id;
+  try {
+    await db.query('UPDATE users SET token_version = COALESCE(token_version, 1) + 1 WHERE id = $1', [userId]);
+    res.json({ message: 'Logged out from all devices successfully' });
   } catch (error) {
     next(error);
   }
