@@ -6,11 +6,12 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // Stream the PDF to response
   doc.pipe(res);
 
-  // Colors
+  // Colors & Layout Constants
   const primaryColor = '#4E3629'; // Elegant Tea/Coffee Brown
   const secondaryColor = '#8D7B68';
   const textColor = '#333333';
   const gridColor = '#E0DCD5';
+  const startX = 50;
 
   // Title / Header
   doc.fillColor(primaryColor)
@@ -34,16 +35,70 @@ exports.buildPDF = (reportData, filterDescription, res) => {
      .text(`Grand Total: ₹${reportData.grandTotal.toFixed(2)}`, { color: primaryColor })
      .moveDown(2);
 
+  // Beverages Count Summary Section
+  if (reportData.beverageSummary && reportData.beverageSummary.length > 0) {
+    doc.fillColor(primaryColor)
+       .fontSize(12)
+       .font('Helvetica-Bold')
+       .text('Beverages Count Summary')
+       .moveDown(0.5);
+
+    let sumY = doc.y;
+
+    // Summary Table Headers
+    doc.fillColor(secondaryColor).fontSize(9).font('Helvetica-Bold');
+    doc.text('Beverage Item', startX, sumY);
+    doc.text('Quantity Ordered', startX + 180, sumY, { width: 100, align: 'right' });
+    doc.text('Total Cost', startX + 300, sumY, { width: 100, align: 'right' });
+
+    // Underline summary headers
+    doc.strokeColor(gridColor)
+       .lineWidth(0.5)
+       .moveTo(startX, sumY + 12)
+       .lineTo(startX + 400, sumY + 12)
+       .stroke();
+
+    sumY += 18;
+    doc.font('Helvetica').fontSize(9).fillColor(textColor);
+    reportData.beverageSummary.forEach(item => {
+      if (sumY > 740) {
+        doc.addPage();
+        sumY = 50;
+        
+        doc.fillColor(secondaryColor).fontSize(9).font('Helvetica-Bold');
+        doc.text('Beverage Item', startX, sumY);
+        doc.text('Quantity Ordered', startX + 180, sumY, { width: 100, align: 'right' });
+        doc.text('Total Cost', startX + 300, sumY, { width: 100, align: 'right' });
+
+        doc.strokeColor(gridColor)
+           .lineWidth(0.5)
+           .moveTo(startX, sumY + 12)
+           .lineTo(startX + 400, sumY + 12)
+           .stroke();
+
+        sumY += 18;
+        doc.font('Helvetica').fontSize(9).fillColor(textColor);
+      }
+
+      doc.text(item.tea_name, startX, sumY);
+      doc.text(item.total_qty.toString(), startX + 180, sumY, { width: 100, align: 'right' });
+      doc.text(`₹${Number(item.total_amt).toFixed(2)}`, startX + 300, sumY, { width: 100, align: 'right' });
+      sumY += 16;
+    });
+
+    doc.y = sumY + 15;
+    doc.moveDown(1);
+  }
+
   // Draw separator line
   doc.strokeColor(secondaryColor)
      .lineWidth(1)
-     .moveTo(50, doc.y)
+     .moveTo(startX, doc.y)
      .lineTo(545, doc.y)
      .stroke()
      .moveDown(1);
 
   // Table Headers
-  const startX = 50;
   const startY = doc.y;
   
   doc.fillColor(primaryColor).fontSize(10).font('Helvetica-Bold');

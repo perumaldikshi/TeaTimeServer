@@ -65,15 +65,34 @@ const compileReportData = async (filters) => {
 
   const ordersRes = await db.query(query, params);
   
-  // Calculate Grand Total
+  // Calculate Grand Total and compile Beverage Summary
   let grandTotal = 0;
+  const beverageSummaryMap = {};
+
   ordersRes.rows.forEach(order => {
     grandTotal += Number(order.amount);
+    
+    const name = order.tea_name;
+    const qty = Number(order.quantity);
+    const amt = Number(order.amount);
+
+    if (!beverageSummaryMap[name]) {
+      beverageSummaryMap[name] = {
+        tea_name: name,
+        total_qty: 0,
+        total_amt: 0
+      };
+    }
+    beverageSummaryMap[name].total_qty += qty;
+    beverageSummaryMap[name].total_amt += amt;
   });
+
+  const beverageSummary = Object.values(beverageSummaryMap).sort((a, b) => b.total_qty - a.total_qty);
 
   return {
     orders: ordersRes.rows,
     grandTotal,
+    beverageSummary,
     dateRange: {
       startDate: finalStartDate,
       endDate: finalEndDate

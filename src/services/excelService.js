@@ -9,6 +9,53 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
   worksheet.addRow([`Report Scope: ${filterDescription} | Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`]);
   worksheet.addRow([]); // Spacer Spacer
 
+  // Side-by-side Beverages Count Summary on Columns I, J, K
+  if (reportData.beverageSummary && reportData.beverageSummary.length > 0) {
+    // Summary Title Card
+    worksheet.mergeCells('I4:K4');
+    const summaryTitle = worksheet.getCell('I4');
+    summaryTitle.value = 'Beverages Count Summary';
+    summaryTitle.font = { bold: true, color: { argb: 'FF4E3629' }, size: 11 };
+    summaryTitle.alignment = { horizontal: 'center', vertical: 'middle' };
+    
+    // Summary Headers
+    worksheet.getCell('I5').value = 'Beverage Item';
+    worksheet.getCell('J5').value = 'Quantity';
+    worksheet.getCell('K5').value = 'Total Cost';
+
+    ['I5', 'J5', 'K5'].forEach(cellRef => {
+      const cell = worksheet.getCell(cellRef);
+      cell.font = { bold: true };
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0DCD5' }
+      };
+      cell.border = {
+        bottom: { style: 'thin', color: { argb: 'FF8D7B68' } }
+      };
+    });
+
+    let sumRowIndex = 6;
+    reportData.beverageSummary.forEach(item => {
+      worksheet.getCell(`I${sumRowIndex}`).value = item.tea_name;
+      worksheet.getCell(`J${sumRowIndex}`).value = Number(item.total_qty);
+      worksheet.getCell(`K${sumRowIndex}`).value = Number(item.total_amt);
+
+      worksheet.getCell(`J${sumRowIndex}`).numFmt = '#,##0';
+      worksheet.getCell(`K${sumRowIndex}`).numFmt = '#,##0.00';
+      
+      // Add subtle gridline under the item row
+      ['I', 'J', 'K'].forEach(col => {
+        worksheet.getCell(`${col}${sumRowIndex}`).border = {
+          bottom: { style: 'thin', color: { argb: 'FFE0DCD5' } }
+        };
+      });
+      
+      sumRowIndex++;
+    });
+  }
+
   // Column Headers
   const headerRow = worksheet.addRow([
     'Order Date',
