@@ -53,7 +53,7 @@ const rescheduleJobs = async () => {
       settings[r.key] = r.value;
     });
 
-    const startTime = settings['tea_time_start'] || '16:55';
+    const startTime = settings['tea_time_start'] || '16:30';
     const cutoffTime = settings['cutoff_time'] || '17:10';
 
     // 2. Parse times (HH:MM)
