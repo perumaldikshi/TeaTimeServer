@@ -64,7 +64,8 @@ const rescheduleJobs = async () => {
     activeJobs.forEach(job => job.stop());
     activeJobs = [];
 
-    const tz = process.env.TZ || 'Asia/Kolkata';
+    let tz = process.env.TZ || 'Asia/Kolkata';
+    if (tz.startsWith(':')) tz = tz.substring(1);
 
     // 4. Schedule Start Job
     const startCronExpr = `${startM} ${startH} * * *`;

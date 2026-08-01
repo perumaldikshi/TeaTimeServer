@@ -3,7 +3,9 @@ const cronService = require('../services/cronService');
 
 // Get current time in minutes in the target local timezone
 const getLocalTimeVal = () => {
-  const tz = process.env.TZ || 'Asia/Kolkata';
+  let tz = process.env.TZ || 'Asia/Kolkata';
+  if (tz.startsWith(':')) tz = tz.substring(1);
+  
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric',
