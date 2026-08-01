@@ -72,7 +72,7 @@ app.listen(PORT, () => {
   console.log(`===============================================`);
   
   // Initialize Daily Automated Alerts (4:55 PM & 5:10 PM schedulers)
-  initCronJobs();
+  // initCronJobs(); // Disabled for Vercel: background tasks do not work in Serverless functions
 });
 
 // Graceful shutdown
