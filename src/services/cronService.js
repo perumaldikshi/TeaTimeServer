@@ -64,8 +64,8 @@ const rescheduleJobs = async () => {
     activeJobs.forEach(job => job.stop());
     activeJobs = [];
 
-    let tz = process.env.TZ || 'Asia/Kolkata';
-    if (tz.startsWith(':')) tz = tz.substring(1);
+    // Use APP_TIMEZONE to override, default to Asia/Kolkata (Vercel automatically sets TZ=UTC)
+    let tz = process.env.APP_TIMEZONE || 'Asia/Kolkata';
 
     // 4. Schedule Start Job
     const startCronExpr = `${startM} ${startH} * * *`;

@@ -3,8 +3,8 @@ const cronService = require('../services/cronService');
 
 // Get current time in minutes in the target local timezone
 const getLocalTimeVal = () => {
-  let tz = process.env.TZ || 'Asia/Kolkata';
-  if (tz.startsWith(':')) tz = tz.substring(1);
+  // Use APP_TIMEZONE to override, default to Asia/Kolkata (Vercel automatically sets TZ=UTC)
+  let tz = process.env.APP_TIMEZONE || 'Asia/Kolkata';
   
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
