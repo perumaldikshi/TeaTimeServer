@@ -56,12 +56,12 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
     });
   }
 
-  // Column Headers
   const headerRow = worksheet.addRow([
     'Order Date',
     'Employee Name',
     'Department',
     'Tea/Coffee Item',
+    'Sugar Preference',
     'Quantity',
     'Unit Price',
     'Total Amount'
@@ -72,19 +72,25 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
   let currentRowIndex = 5;
   if (reportData.orders && reportData.orders.length > 0) {
     reportData.orders.forEach(order => {
+      let sugarText = '—';
+      if (order.item_type === 'drink') {
+        sugarText = order.sugar_preference === 'with_sugar' ? 'With Sugar' : 'No Sugar';
+      }
+
       const row = worksheet.addRow([
         new Date(order.order_date).toLocaleDateString(),
         order.employee_name || 'N/A',
         order.department || 'N/A',
         order.tea_name,
+        sugarText,
         Number(order.quantity),
         Number(order.unit_price),
         Number(order.amount)
       ]);
       
-      row.getCell(5).numFmt = '#,##0';
-      row.getCell(6).numFmt = '#,##0.00';
+      row.getCell(6).numFmt = '#,##0';
       row.getCell(7).numFmt = '#,##0.00';
+      row.getCell(8).numFmt = '#,##0.00';
       currentRowIndex++;
     });
   } else {
@@ -98,11 +104,11 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
 
   const totalRowIndex = currentRowIndex;
   const totalRow = worksheet.addRow([
-    'Grand Total', '', '', '', '', '', { formula: `SUM(G5:G${totalRowIndex - 2})` }
+    'Grand Total', '', '', '', '', '', '', { formula: `SUM(H5:H${totalRowIndex - 2})` }
   ]);
   
   totalRow.getCell(1).font = { bold: true };
-  const sumCell = totalRow.getCell(7);
+  const sumCell = totalRow.getCell(8);
   sumCell.font = { bold: true };
   sumCell.numFmt = '#,##0.00';
 

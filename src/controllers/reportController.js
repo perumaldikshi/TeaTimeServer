@@ -31,8 +31,9 @@ const compileReportData = async (filters) => {
 
   let query = `
     SELECT o.id, o.quantity, o.amount, o.status, o.order_date, o.created_at,
+           o.sugar_preference,
            u.name as employee_name, u.email as employee_email, u.department,
-           t.name as tea_name, t.price as unit_price
+           t.name as tea_name, t.price as unit_price, t.item_type
     FROM tea_orders o
     JOIN users u ON o.user_id = u.id
     JOIN tea_items t ON o.tea_item_id = t.id
@@ -65,9 +66,11 @@ const compileReportData = async (filters) => {
 
   const ordersRes = await db.query(query, params);
   
-  // Calculate Grand Total and compile Beverage Summary
+  // Calculate Grand Total, Beverage Summary, and Sugar Preference breakdown
   let grandTotal = 0;
   const beverageSummaryMap = {};
+  let withSugarCount = 0;
+  let withoutSugarCount = 0;
 
   ordersRes.rows.forEach(order => {
     grandTotal += Number(order.amount);
@@ -79,12 +82,26 @@ const compileReportData = async (filters) => {
     if (!beverageSummaryMap[name]) {
       beverageSummaryMap[name] = {
         tea_name: name,
+        item_type: order.item_type,
         total_qty: 0,
-        total_amt: 0
+        total_amt: 0,
+        with_sugar: 0,
+        without_sugar: 0
       };
     }
     beverageSummaryMap[name].total_qty += qty;
     beverageSummaryMap[name].total_amt += amt;
+
+    // Sugar preference count - only for drink items
+    if (order.item_type === 'drink') {
+      if (order.sugar_preference === 'with_sugar') {
+        beverageSummaryMap[name].with_sugar += qty;
+        withSugarCount += qty;
+      } else if (order.sugar_preference === 'without_sugar') {
+        beverageSummaryMap[name].without_sugar += qty;
+        withoutSugarCount += qty;
+      }
+    }
   });
 
   const beverageSummary = Object.values(beverageSummaryMap).sort((a, b) => b.total_qty - a.total_qty);
@@ -93,6 +110,11 @@ const compileReportData = async (filters) => {
     orders: ordersRes.rows,
     grandTotal,
     beverageSummary,
+    sugarSummary: {
+      withSugar: withSugarCount,
+      withoutSugar: withoutSugarCount,
+      total: withSugarCount + withoutSugarCount
+    },
     dateRange: {
       startDate: finalStartDate,
       endDate: finalEndDate

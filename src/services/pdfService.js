@@ -32,13 +32,14 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // ── Column layout (total usable width ≈ 495) ───────────────
   const startX = 50;
   const COL = {
-    date:     { x: startX,       w: 62  },
-    name:     { x: startX + 62,  w: 100 },
-    dept:     { x: startX + 162, w: 100 },
-    item:     { x: startX + 262, w: 100 },
-    qty:      { x: startX + 362, w: 30  },
-    price:    { x: startX + 392, w: 50  },
-    total:    { x: startX + 442, w: 53  },
+    date:     { x: startX,       w: 60  },
+    name:     { x: startX + 60,  w: 85  },
+    dept:     { x: startX + 145, w: 85  },
+    item:     { x: startX + 230, w: 90  },
+    sugar:    { x: startX + 320, w: 55  },
+    qty:      { x: startX + 375, w: 30  },
+    price:    { x: startX + 405, w: 40  },
+    total:    { x: startX + 445, w: 50  },
   };
   const tableRight = startX + 495;
 
@@ -117,6 +118,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
     doc.text('Employee',      COL.name.x  + 2, y + 4, { width: COL.name.w  - 2 });
     doc.text('Department',    COL.dept.x  + 2, y + 4, { width: COL.dept.w  - 2 });
     doc.text('Item',          COL.item.x  + 2, y + 4, { width: COL.item.w  - 2 });
+    doc.text('Sugar',         COL.sugar.x + 2, y + 4, { width: COL.sugar.w - 2 });
     doc.text('Qty',           COL.qty.x,        y + 4, { width: COL.qty.w,   align: 'right' });
     doc.text('Price',         COL.price.x,      y + 4, { width: COL.price.w, align: 'right' });
     doc.text(`Total(${RS})`,  COL.total.x,      y + 4, { width: COL.total.w, align: 'right' });
@@ -148,11 +150,17 @@ exports.buildPDF = (reportData, filterDescription, res) => {
         ? new Date(order.order_date + 'T00:00:00').toLocaleDateString('en-IN')
         : new Date(order.created_at).toLocaleDateString('en-IN');
 
+      let sugarText = '—';
+      if (order.item_type === 'drink') {
+        sugarText = order.sugar_preference === 'with_sugar' ? 'With Sugar' : 'No Sugar';
+      }
+
       doc.fillColor(textColor);
       doc.text(orderDate,                              COL.date.x  + 2, y + 3, { width: COL.date.w  - 2, lineBreak: false });
-      doc.text(truncate(order.employee_name, 17),      COL.name.x  + 2, y + 3, { width: COL.name.w  - 2, lineBreak: false });
-      doc.text(truncate(order.department,   17),       COL.dept.x  + 2, y + 3, { width: COL.dept.w  - 2, lineBreak: false });
-      doc.text(truncate(order.tea_name,     17),       COL.item.x  + 2, y + 3, { width: COL.item.w  - 2, lineBreak: false });
+      doc.text(truncate(order.employee_name, 15),      COL.name.x  + 2, y + 3, { width: COL.name.w  - 2, lineBreak: false });
+      doc.text(truncate(order.department,   15),       COL.dept.x  + 2, y + 3, { width: COL.dept.w  - 2, lineBreak: false });
+      doc.text(truncate(order.tea_name,     16),       COL.item.x  + 2, y + 3, { width: COL.item.w  - 2, lineBreak: false });
+      doc.text(sugarText,                              COL.sugar.x + 2, y + 3, { width: COL.sugar.w - 2, lineBreak: false });
       doc.text(order.quantity.toString(),              COL.qty.x,        y + 3, { width: COL.qty.w,   align: 'right', lineBreak: false });
       doc.text(Number(order.unit_price).toFixed(2),   COL.price.x,      y + 3, { width: COL.price.w, align: 'right', lineBreak: false });
       doc.text(Number(order.amount).toFixed(2),        COL.total.x,      y + 3, { width: COL.total.w, align: 'right', lineBreak: false });
