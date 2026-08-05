@@ -32,6 +32,7 @@ router.delete('/tea-items/:id', authenticateToken, isAdmin, adminController.dele
 
 // --- SETTINGS (Admin Only) ---
 router.put('/settings', authenticateToken, isAdmin, adminController.updateSettings);
+router.post('/settings/force-toggle', authenticateToken, isAdmin, adminController.forceToggle);
 
 // --- ORDERS ---
 router.post('/order', authenticateToken, isEmployee, orderController.placeOrder);

@@ -1,6 +1,5 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
-const cronService = require('../services/cronService');
 
 // 1. Employees Management
 exports.getEmployees = async (req, res, next) => {
@@ -178,11 +177,6 @@ exports.updateSettings = async (req, res, next) => {
       await db.query('INSERT INTO settings (key, value) VALUES (\'is_ordering_open\', $1) ON CONFLICT (key) DO UPDATE SET value = $1', [openVal]);
     }
 
-    if (teaTimeStart || cutoffTime) {
-      // Trigger a rescheduling of the background cron jobs with the new times
-      await cronService.rescheduleJobs();
-    }
-
     // Return the updated settings
     const settingsRes = await db.query('SELECT key, value FROM settings');
     const settingsObj = {};
@@ -194,6 +188,31 @@ exports.updateSettings = async (req, res, next) => {
       message: 'Settings updated successfully',
       settings: settingsObj
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 3b. Admin Force Toggle — Force open or close ordering window
+exports.forceToggle = async (req, res, next) => {
+  const { action } = req.body; // action: 'open' | 'closed' | 'auto'
+  try {
+    if (!['open', 'closed', 'auto'].includes(action)) {
+      return res.status(400).json({ error: 'action must be open, closed, or auto' });
+    }
+
+    if (action === 'auto') {
+      // Remove manual override — revert to time-based auto
+      await db.query('DELETE FROM settings WHERE key = \'manual_override\'');
+    } else {
+      await db.query(
+        'INSERT INTO settings (key, value) VALUES (\'manual_override\', $1) ON CONFLICT (key) DO UPDATE SET value = $1',
+        [action]
+      );
+    }
+
+    const label = action === 'open' ? 'Force opened' : action === 'closed' ? 'Force closed' : 'Reverted to auto (time-based)';
+    res.json({ message: label, action });
   } catch (error) {
     next(error);
   }

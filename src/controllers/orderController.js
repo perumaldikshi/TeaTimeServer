@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 // Get current time in minutes in the target local timezone
 const getLocalTimeVal = () => {
-  const tz = process.env.TZ || 'Asia/Kolkata';
+  const tz = process.env.APP_TIMEZONE || process.env.TZ || 'Asia/Kolkata';
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric',
@@ -15,7 +15,11 @@ const getLocalTimeVal = () => {
   return hour * 60 + minute;
 };
 
-// Helper function to check if ordering is open
+// Helper function to check if ordering is open.
+// Logic:
+//   manual_override = 'open'   → Admin force-opened (always open regardless of time)
+//   manual_override = 'closed' → Admin force-closed (always closed regardless of time)
+//   absent / other             → Auto: determined purely by configured time window
 const isOrderingOpen = async () => {
   try {
     const settingsRes = await db.query('SELECT key, value FROM settings');
@@ -24,28 +28,33 @@ const isOrderingOpen = async () => {
       settings[r.key] = r.value;
     });
 
-    // If override is explicitly true, ordering is open
-    if (settings['is_ordering_open'] === 'true') {
-      return { open: true, message: 'Ordering is open (Manual Override)' };
+    const override = settings['manual_override'];
+
+    // Admin force-open
+    if (override === 'open') {
+      return { open: true, message: 'Ordering is open (Admin Override)', override: 'open' };
     }
 
-    const currentTimeVal = getLocalTimeVal();
+    // Admin force-close
+    if (override === 'closed') {
+      return { open: false, message: 'Ordering closed (Admin Override)', override: 'closed' };
+    }
 
-    // Parse start and cutoff times (Format expected: HH:MM)
+    // Auto: time-based check (no cron needed — checked on every request)
+    const currentTimeVal = getLocalTimeVal();
     const [startH, startM] = (settings['tea_time_start'] || '16:55').split(':').map(Number);
     const [cutoffH, cutoffM] = (settings['cutoff_time'] || '17:10').split(':').map(Number);
-
     const startTimeVal = startH * 60 + startM;
     const cutoffTimeVal = cutoffH * 60 + cutoffM;
 
     if (currentTimeVal >= startTimeVal && currentTimeVal <= cutoffTimeVal) {
-      return { open: true, message: 'Ordering is open' };
+      return { open: true, message: 'Ordering is open', override: null };
     }
 
-    return { open: false, message: 'Ordering Closed' };
+    return { open: false, message: 'Ordering Closed', override: null };
   } catch (err) {
     console.error('Error checking ordering window:', err);
-    return { open: false, message: 'Error checking ordering window' };
+    return { open: false, message: 'Error checking ordering window', override: null };
   }
 };
 
@@ -327,6 +336,7 @@ exports.getDashboard = async (req, res, next) => {
         orderingWindow: {
           isOpen: windowStatus.open,
           message: windowStatus.message,
+          override: windowStatus.override,
           teaTimeStart: settings['tea_time_start'],
           cutoffTime: settings['cutoff_time']
         },
@@ -359,6 +369,7 @@ exports.getDashboard = async (req, res, next) => {
         orderingWindow: {
           isOpen: windowStatus.open,
           message: windowStatus.message,
+          override: windowStatus.override,
           teaTimeStart: settings['tea_time_start'],
           cutoffTime: settings['cutoff_time']
         },
