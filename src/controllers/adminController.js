@@ -107,7 +107,7 @@ exports.getTeaItems = async (req, res, next) => {
 };
 
 exports.createTeaItem = async (req, res, next) => {
-  const { name, price, is_available } = req.body;
+  const { name, price, is_available, item_type } = req.body;
   try {
     if (!name || price === undefined) {
       return res.status(400).json({ error: 'Name and price are required' });
@@ -119,10 +119,11 @@ exports.createTeaItem = async (req, res, next) => {
     }
 
     const availableVal = is_available !== undefined ? is_available : true;
+    const itemTypeVal = item_type && ['drink', 'snack'].includes(item_type) ? item_type : 'drink';
 
     const result = await db.query(
-      'INSERT INTO tea_items (name, price, is_available) VALUES ($1, $2, $3) RETURNING *',
-      [name, price, availableVal]
+      'INSERT INTO tea_items (name, price, is_available, item_type) VALUES ($1, $2, $3, $4) RETURNING *',
+      [name, price, availableVal, itemTypeVal]
     );
 
     res.status(201).json({
@@ -136,7 +137,7 @@ exports.createTeaItem = async (req, res, next) => {
 
 exports.updateTeaItem = async (req, res, next) => {
   const { id } = req.params;
-  const { name, price, is_available } = req.body;
+  const { name, price, is_available, item_type } = req.body;
   try {
     const itemRes = await db.query('SELECT * FROM tea_items WHERE id = $1', [id]);
     if (itemRes.rows.length === 0) {
@@ -147,10 +148,11 @@ exports.updateTeaItem = async (req, res, next) => {
     const updatedName = name !== undefined ? name : currentItem.name;
     const updatedPrice = price !== undefined ? price : currentItem.price;
     const updatedAvailable = is_available !== undefined ? is_available : currentItem.is_available;
+    const updatedItemType = item_type && ['drink', 'snack'].includes(item_type) ? item_type : currentItem.item_type;
 
     const result = await db.query(
-      'UPDATE tea_items SET name = $1, price = $2, is_available = $3 WHERE id = $4 RETURNING *',
-      [updatedName, updatedPrice, updatedAvailable, id]
+      'UPDATE tea_items SET name = $1, price = $2, is_available = $3, item_type = $4 WHERE id = $5 RETURNING *',
+      [updatedName, updatedPrice, updatedAvailable, updatedItemType, id]
     );
 
     res.json({

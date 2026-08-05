@@ -60,7 +60,7 @@ const isOrderingOpen = async () => {
 
 // 1. Place order
 exports.placeOrder = async (req, res, next) => {
-  const { teaItemId, quantity } = req.body;
+  const { teaItemId, quantity, sugar_preference } = req.body;
   const userId = req.user.id;
 
   try {
@@ -75,7 +75,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // Get item details for price calculation
-    const itemRes = await db.query('SELECT name, price, is_available FROM tea_items WHERE id = $1', [teaItemId]);
+    const itemRes = await db.query('SELECT name, price, is_available, item_type FROM tea_items WHERE id = $1', [teaItemId]);
     if (itemRes.rows.length === 0) {
       return res.status(404).json({ error: 'Tea item not found' });
     }
@@ -83,6 +83,15 @@ exports.placeOrder = async (req, res, next) => {
     const item = itemRes.rows[0];
     if (!item.is_available) {
       return res.status(400).json({ error: `${item.name} is currently not available` });
+    }
+
+    // Validate sugar_preference: required for drink items, must be null for snacks
+    let finalSugarPref = null;
+    if (item.item_type === 'drink') {
+      if (!sugar_preference || !['with_sugar', 'without_sugar'].includes(sugar_preference)) {
+        return res.status(400).json({ error: 'Sugar preference (with_sugar or without_sugar) is required for drink items' });
+      }
+      finalSugarPref = sugar_preference;
     }
 
     const amount = Number(item.price) * Number(quantity);
@@ -101,8 +110,8 @@ exports.placeOrder = async (req, res, next) => {
 
     // Create Order
     const insertRes = await db.query(
-      'INSERT INTO tea_orders (user_id, tea_item_id, quantity, amount, status, order_date) VALUES ($1, $2, $3, $4, \'ordered\', $5) RETURNING *',
-      [userId, teaItemId, quantity, amount, today]
+      'INSERT INTO tea_orders (user_id, tea_item_id, quantity, amount, status, sugar_preference, order_date) VALUES ($1, $2, $3, $4, \'ordered\', $5, $6) RETURNING *',
+      [userId, teaItemId, quantity, amount, finalSugarPref, today]
     );
 
     res.status(201).json({
@@ -184,8 +193,9 @@ exports.getOrderHistory = async (req, res, next) => {
     `;
     let selectQuery = `
       SELECT o.id, o.quantity, o.amount, o.status, o.order_date, o.created_at,
+             o.sugar_preference,
              u.name as employee_name, u.email as employee_email, u.department,
-             t.name as tea_name, t.price as unit_price
+             t.name as tea_name, t.price as unit_price, t.item_type
       FROM tea_orders o
       JOIN users u ON o.user_id = u.id
       JOIN tea_items t ON o.tea_item_id = t.id
@@ -265,9 +275,9 @@ exports.getTodayOrders = async (req, res, next) => {
     if (userRole === 'admin') {
       // Admin sees everyone's today orders
       result = await db.query(`
-        SELECT o.id, o.quantity, o.amount, o.status, o.created_at,
+        SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference,
                u.name as employee_name, u.department,
-               t.name as tea_name, t.price as unit_price
+               t.name as tea_name, t.price as unit_price, t.item_type
         FROM tea_orders o
         JOIN users u ON o.user_id = u.id
         JOIN tea_items t ON o.tea_item_id = t.id
@@ -277,8 +287,8 @@ exports.getTodayOrders = async (req, res, next) => {
     } else {
       // Employee sees only their own today's orders
       result = await db.query(`
-        SELECT o.id, o.quantity, o.amount, o.status, o.created_at,
-               t.name as tea_name, t.price as unit_price
+        SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference,
+               t.name as tea_name, t.price as unit_price, t.item_type
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.user_id = $1 AND o.order_date = $2
@@ -309,7 +319,7 @@ exports.getDashboard = async (req, res, next) => {
       settings[r.key] = r.value;
     });
 
-    const activeTeaItems = await db.query('SELECT id, name, price FROM tea_items WHERE is_available = true');
+    const activeTeaItems = await db.query('SELECT id, name, price, item_type FROM tea_items WHERE is_available = true');
 
     if (userRole === 'admin') {
       // Admin Dashboard Details: Today's Orders item counts, total amount
@@ -389,7 +399,7 @@ exports.getDashboard = async (req, res, next) => {
 // 6. Update today's order (PUT /order)
 exports.updateTodayOrder = async (req, res, next) => {
   const userId = req.user.id;
-  const { teaItemId, quantity, status } = req.body;
+  const { teaItemId, quantity, status, sugar_preference } = req.body;
   const today = new Date().toISOString().split('T')[0];
 
   try {
@@ -427,8 +437,8 @@ exports.updateTodayOrder = async (req, res, next) => {
       return res.status(400).json({ error: 'Quantity must be greater than 0' });
     }
 
-    // Get item price
-    const itemRes = await db.query('SELECT name, price, is_available FROM tea_items WHERE id = $1', [finalTeaItemId]);
+    // Get item price and type
+    const itemRes = await db.query('SELECT name, price, is_available, item_type FROM tea_items WHERE id = $1', [finalTeaItemId]);
     if (itemRes.rows.length === 0) {
       return res.status(404).json({ error: 'Tea item not found' });
     }
@@ -437,11 +447,23 @@ exports.updateTodayOrder = async (req, res, next) => {
       return res.status(400).json({ error: `${item.name} is currently not available` });
     }
 
+    // Validate sugar_preference for drink items
+    let finalSugarPref = order.sugar_preference;
+    if (item.item_type === 'drink') {
+      const newSugarPref = sugar_preference !== undefined ? sugar_preference : order.sugar_preference;
+      if (!newSugarPref || !['with_sugar', 'without_sugar'].includes(newSugarPref)) {
+        return res.status(400).json({ error: 'Sugar preference (with_sugar or without_sugar) is required for drink items' });
+      }
+      finalSugarPref = newSugarPref;
+    } else {
+      finalSugarPref = null;
+    }
+
     const finalAmount = Number(item.price) * Number(finalQuantity);
 
     const updateRes = await db.query(
-      'UPDATE tea_orders SET tea_item_id = $1, quantity = $2, amount = $3 WHERE id = $4 RETURNING *',
-      [finalTeaItemId, finalQuantity, finalAmount, order.id]
+      'UPDATE tea_orders SET tea_item_id = $1, quantity = $2, amount = $3, sugar_preference = $4 WHERE id = $5 RETURNING *',
+      [finalTeaItemId, finalQuantity, finalAmount, finalSugarPref, order.id]
     );
 
     res.json({
