@@ -1,12 +1,25 @@
 const PDFDocument = require('pdfkit');
+const path = require('path');
 
-// PDFKit's built-in fonts (Helvetica) don't support the ₹ Unicode glyph.
-// Use 'Rs.' as a safe ASCII equivalent throughout the PDF.
-const RS = 'Rs.';
+// NotoSans supports the ₹ Unicode glyph (U+20B9) which Helvetica cannot render.
+const FONT_REGULAR = path.join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Regular.ttf');
+const FONT_BOLD    = path.join(__dirname, '..', 'assets', 'fonts', 'NotoSans-Bold.ttf');
+const fs = require('fs');
+const hasFonts = fs.existsSync(FONT_REGULAR);
 
 exports.buildPDF = (reportData, filterDescription, res) => {
   const doc = new PDFDocument({ margin: 50, size: 'A4' });
 
+  // Register custom fonts if available
+  if (hasFonts) {
+    doc.registerFont('Regular', FONT_REGULAR);
+    if (fs.existsSync(FONT_BOLD)) doc.registerFont('Bold', FONT_BOLD);
+    else doc.registerFont('Bold', FONT_REGULAR); // fallback bold = regular
+  }
+
+  const F_REG  = hasFonts ? 'Regular'       : 'Helvetica';
+  const F_BOLD = hasFonts ? 'Bold'           : 'Helvetica-Bold';
+  const RS     = '\u20B9'; // ₹  — renders correctly with NotoSans
   doc.pipe(res);
 
   // ── Design Tokens ──────────────────────────────────────────
@@ -34,12 +47,12 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // ────────────────────────────────────────────────────────────
   doc.fillColor(primaryColor)
      .fontSize(20)
-     .font('Helvetica-Bold')
+     .font(F_BOLD)
      .text('Tea Time Management System', { align: 'center' });
 
   doc.fontSize(11)
      .fillColor(secondaryColor)
-     .font('Helvetica')
+     .font(F_REG)
      .text('Employee Tea / Coffee Consumption Report', { align: 'center' })
      .moveDown(0.8);
 
@@ -49,10 +62,10 @@ exports.buildPDF = (reportData, filterDescription, res) => {
      .moveDown(0.6);
 
   // ── Metadata ────────────────────────────────────────────────
-  doc.fillColor(textColor).fontSize(9).font('Helvetica');
+  doc.fillColor(textColor).fontSize(9).font(F_REG);
   doc.text(`Scope / Filter : ${filterDescription}`, startX);
   doc.text(`Generated Date : ${new Date().toLocaleDateString('en-IN')}`, startX);
-  doc.font('Helvetica-Bold')
+  doc.font(F_BOLD)
      .text(`Grand Total    : ${RS} ${reportData.grandTotal.toFixed(2)}`, startX);
   doc.moveDown(1.2);
 
@@ -60,12 +73,12 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // BEVERAGE SUMMARY
   // ────────────────────────────────────────────────────────────
   if (reportData.beverageSummary && reportData.beverageSummary.length > 0) {
-    doc.fillColor(primaryColor).fontSize(11).font('Helvetica-Bold')
+    doc.fillColor(primaryColor).fontSize(11).font(F_BOLD)
        .text('Beverage Summary').moveDown(0.4);
 
     const drawSumHeader = (y) => {
       doc.rect(startX, y, 400, 16).fill(mutedBg);
-      doc.fillColor(primaryColor).fontSize(8.5).font('Helvetica-Bold');
+      doc.fillColor(primaryColor).fontSize(8.5).font(F_BOLD);
       doc.text('Beverage Item',    startX + 4,   y + 3);
       doc.text('Qty',              startX + 230,  y + 3, { width: 80, align: 'right' });
       doc.text(`Total (${RS})`,    startX + 320,  y + 3, { width: 76, align: 'right' });
@@ -73,10 +86,10 @@ exports.buildPDF = (reportData, filterDescription, res) => {
     };
 
     let sy = drawSumHeader(doc.y);
-    doc.font('Helvetica').fontSize(8.5).fillColor(textColor);
+    doc.font(F_REG).fontSize(8.5).fillColor(textColor);
 
     reportData.beverageSummary.forEach((item, idx) => {
-      if (sy > 730) { doc.addPage(); sy = drawSumHeader(50); doc.font('Helvetica').fontSize(8.5).fillColor(textColor); }
+      if (sy > 730) { doc.addPage(); sy = drawSumHeader(50); doc.font(F_REG).fontSize(8.5).fillColor(textColor); }
       if (idx % 2 === 0) doc.rect(startX, sy, 400, 15).fill('#FAFAF8');
       doc.fillColor(textColor);
       doc.text(item.tea_name,                     startX + 4,  sy + 2);
@@ -99,7 +112,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   const drawTableHeader = (y) => {
     // Header background
     doc.rect(startX, y, 495, 18).fill(primaryColor);
-    doc.fillColor('#FFFFFF').fontSize(8.5).font('Helvetica-Bold');
+    doc.fillColor('#FFFFFF').fontSize(8.5).font(F_BOLD);
     doc.text('Date',          COL.date.x  + 2, y + 4, { width: COL.date.w  - 2 });
     doc.text('Employee',      COL.name.x  + 2, y + 4, { width: COL.name.w  - 2 });
     doc.text('Department',    COL.dept.x  + 2, y + 4, { width: COL.dept.w  - 2 });
@@ -111,7 +124,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   };
 
   let y = drawTableHeader(doc.y);
-  doc.font('Helvetica').fontSize(8.5).fillColor(textColor);
+  doc.font(F_REG).fontSize(8.5).fillColor(textColor);
 
   const truncate = (str, maxLen) => {
     if (!str) return 'N/A';
@@ -123,7 +136,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
       if (y > 730) {
         doc.addPage();
         y = drawTableHeader(50);
-        doc.font('Helvetica').fontSize(8.5).fillColor(textColor);
+        doc.font(F_REG).fontSize(8.5).fillColor(textColor);
       }
 
       // Alternating row background
@@ -162,13 +175,13 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   if (y > 740) { doc.addPage(); y = 50; }
 
   doc.rect(startX, y, 495, 22).fill(primaryColor);
-  doc.fillColor('#FFFFFF').fontSize(10).font('Helvetica-Bold');
+  doc.fillColor('#FFFFFF').fontSize(10).font(F_BOLD);
   doc.text('GRAND TOTAL', COL.date.x + 2, y + 5, { width: 380 });
   doc.text(`${RS} ${reportData.grandTotal.toFixed(2)}`, COL.total.x, y + 5, { width: COL.total.w, align: 'right' });
 
   // Footer note
   y += 32;
-  doc.fillColor(secondaryColor).fontSize(7.5).font('Helvetica')
+  doc.fillColor(secondaryColor).fontSize(7.5).font(F_REG)
      .text('* Generated by Tea Time Management System  |  Amounts in Indian Rupees (INR)', startX, y, { align: 'center', width: 495 });
 
   doc.end();
