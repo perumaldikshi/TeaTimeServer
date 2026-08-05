@@ -112,7 +112,11 @@ exports.getReport = async (req, res, next) => {
 exports.downloadPdf = async (req, res, next) => {
   try {
     const data = await compileReportData(req.query);
-    const filterDesc = req.query.reportType ? `${req.query.reportType.toUpperCase()} Report` : 'Custom Report';
+    const filterDesc = req.query.startDate && req.query.endDate && !req.query.reportType
+      ? `Custom Report: ${req.query.startDate} to ${req.query.endDate}`
+      : req.query.reportType
+        ? `${req.query.reportType.toUpperCase()} Report`
+        : 'Custom Report';
     
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename=tea_report_${Date.now()}.pdf`);
@@ -126,7 +130,11 @@ exports.downloadPdf = async (req, res, next) => {
 exports.downloadExcel = async (req, res, next) => {
   try {
     const data = await compileReportData(req.query);
-    const filterDesc = req.query.reportType ? `${req.query.reportType.toUpperCase()} Report` : 'Custom Report';
+    const filterDesc = req.query.startDate && req.query.endDate && !req.query.reportType
+      ? `Custom Report: ${req.query.startDate} to ${req.query.endDate}`
+      : req.query.reportType
+        ? `${req.query.reportType.toUpperCase()} Report`
+        : 'Custom Report';
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename=tea_report_${Date.now()}.xlsx`);
