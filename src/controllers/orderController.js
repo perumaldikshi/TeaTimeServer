@@ -42,7 +42,7 @@ const isOrderingOpen = async () => {
 
     // Auto: time-based check (no cron needed — checked on every request)
     const currentTimeVal = getLocalTimeVal();
-    const [startH, startM] = (settings['tea_time_start'] || '16:55').split(':').map(Number);
+    const [startH, startM] = (settings['tea_time_start'] || '16:30').split(':').map(Number);
     const [cutoffH, cutoffM] = (settings['cutoff_time'] || '17:10').split(':').map(Number);
     const startTimeVal = startH * 60 + startM;
     const cutoffTimeVal = cutoffH * 60 + cutoffM;

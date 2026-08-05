@@ -57,7 +57,7 @@ exports.triggerTick = async (req, res, next) => {
       settings[r.key] = r.value;
     });
 
-    const startTime = settings['tea_time_start'] || '16:55';
+    const startTime = settings['tea_time_start'] || '16:30';
     const cutoffTime = settings['cutoff_time'] || '17:10';
     const isCurrentlyOpen = settings['is_ordering_open'] === 'true';
 
