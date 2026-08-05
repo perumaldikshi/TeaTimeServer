@@ -1,0 +1,29 @@
+name: TeaTime Auto Cron Trigger
+
+on:
+  schedule:
+    # Runs every 5 minutes (GitHub Actions minimum interval)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub UI
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call TeaTime Cron Tick Endpoint
+        run: |
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.VERCEL_APP_URL }}/api/cron/tick")
+          echo "HTTP Status: $RESPONSE"
+          if [ "$RESPONSE" != "200" ]; then
+            echo "❌ Cron tick failed with status $RESPONSE"
+            exit 1
+          fi
+          echo "✅ Cron tick successful"
+
+      - name: Log Full Response
+        run: |
+          curl -s \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.VERCEL_APP_URL }}/api/cron/tick" | jq .
