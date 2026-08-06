@@ -358,10 +358,11 @@ exports.getDashboard = async (req, res, next) => {
     } else {
       // Employee Dashboard Details: Today's order, and monthly summary
       const todayOrderRes = await db.query(`
-        SELECT o.id, o.quantity, o.amount, o.status, t.name as tea_name
+        SELECT o.id, o.quantity, o.amount, o.status, t.name as tea_name, o.sugar_preference
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.user_id = $1 AND o.order_date = $2
+        ORDER BY o.created_at DESC
         LIMIT 1
       `, [userId, today]);
 
