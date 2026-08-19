@@ -60,12 +60,13 @@ const isOrderingOpen = async () => {
 
 // 1. Place order
 exports.placeOrder = async (req, res, next) => {
-  const { teaItemId, quantity, sugar_preference } = req.body;
+  const { teaItemId, sugar_preference } = req.body;
+  const quantity = 1; // Enforce quantity to 1
   const userId = req.user.id;
 
   try {
-    if (!teaItemId || !quantity || quantity <= 0) {
-      return res.status(400).json({ error: 'Valid teaItemId and quantity are required' });
+    if (!teaItemId) {
+      return res.status(400).json({ error: 'Valid teaItemId is required' });
     }
 
     // Check if ordering is open
@@ -400,7 +401,8 @@ exports.getDashboard = async (req, res, next) => {
 // 6. Update today's order (PUT /order)
 exports.updateTodayOrder = async (req, res, next) => {
   const userId = req.user.id;
-  const { teaItemId, quantity, status, sugar_preference } = req.body;
+  const { teaItemId, status, sugar_preference } = req.body;
+  const quantity = 1; // Enforce quantity to 1
   const today = new Date().toISOString().split('T')[0];
 
   try {
@@ -432,11 +434,7 @@ exports.updateTodayOrder = async (req, res, next) => {
 
     // Otherwise, we are updating quantity or teaItem
     const finalTeaItemId = teaItemId !== undefined ? teaItemId : order.tea_item_id;
-    const finalQuantity = quantity !== undefined ? quantity : order.quantity;
-
-    if (finalQuantity <= 0) {
-      return res.status(400).json({ error: 'Quantity must be greater than 0' });
-    }
+    const finalQuantity = 1; // Enforce quantity to 1
 
     // Get item price and type
     const itemRes = await db.query('SELECT name, price, is_available, item_type FROM tea_items WHERE id = $1', [finalTeaItemId]);
