@@ -31,7 +31,7 @@ const compileReportData = async (filters) => {
 
   let query = `
     SELECT o.id, o.quantity, o.amount, o.status, o.order_date, o.created_at,
-           o.sugar_preference,
+           o.sugar_preference, o.cup_type,
            u.name as employee_name, u.email as employee_email, u.department,
            t.name as tea_name, t.price as unit_price, t.item_type
     FROM tea_orders o
