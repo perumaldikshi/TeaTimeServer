@@ -147,12 +147,15 @@ exports.buildPDF = (reportData, filterDescription, res) => {
       }
 
       const orderDate = order.order_date
-        ? new Date(order.order_date + 'T00:00:00').toLocaleDateString('en-IN')
+        ? new Date(order.order_date).toLocaleDateString('en-IN')
         : new Date(order.created_at).toLocaleDateString('en-IN');
 
       let sugarText = '—';
       if (order.item_type === 'drink') {
         sugarText = order.sugar_preference === 'with_sugar' ? 'With Sugar' : 'No Sugar';
+        if (order.cup_type) {
+           sugarText = order.sugar_preference === 'with_sugar' ? `With (${order.cup_type})` : `No (${order.cup_type})`;
+        }
       }
 
       doc.fillColor(textColor);

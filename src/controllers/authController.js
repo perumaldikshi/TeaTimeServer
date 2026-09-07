@@ -93,7 +93,8 @@ exports.login = async (req, res, next) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        department: user.department
+        department: user.department,
+        can_select_cup_type: user.can_select_cup_type
       }
     });
   } catch (error) {

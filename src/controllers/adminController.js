@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 exports.getEmployees = async (req, res, next) => {
   const { search, role, department } = req.query;
   try {
-    let query = 'SELECT id, name, email, role, department, is_active, created_at FROM users WHERE 1=1';
+    let query = 'SELECT id, name, email, role, department, is_active, can_select_cup_type, created_at FROM users WHERE 1=1';
     const params = [];
 
     if (search) {
@@ -30,7 +30,7 @@ exports.getEmployees = async (req, res, next) => {
 };
 
 exports.createEmployee = async (req, res, next) => {
-  const { name, email, password, role, department } = req.body;
+  const { name, email, password, role, department, can_select_cup_type } = req.body;
   try {
     if (!name || !email || !password || !role || !department) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -46,9 +46,11 @@ exports.createEmployee = async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
+    const cupTypeVal = can_select_cup_type !== undefined ? can_select_cup_type : false;
+
     const result = await db.query(
-      'INSERT INTO users (name, email, password_hash, role, department) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, department, is_active, created_at',
-      [name, trimmedEmail, passwordHash, role, department]
+      'INSERT INTO users (name, email, password_hash, role, department, can_select_cup_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, department, is_active, can_select_cup_type, created_at',
+      [name, trimmedEmail, passwordHash, role, department, cupTypeVal]
     );
 
     res.status(201).json({
@@ -62,7 +64,7 @@ exports.createEmployee = async (req, res, next) => {
 
 exports.updateEmployee = async (req, res, next) => {
   const { id } = req.params;
-  const { name, email, role, department, is_active, password } = req.body;
+  const { name, email, role, department, is_active, password, can_select_cup_type } = req.body;
   try {
     // Check if employee exists
     const empRes = await db.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -76,6 +78,7 @@ exports.updateEmployee = async (req, res, next) => {
     const updatedRole = role !== undefined ? role : currentEmp.role;
     const updatedDept = department !== undefined ? department : currentEmp.department;
     const updatedIsActive = is_active !== undefined ? is_active : currentEmp.is_active;
+    const updatedCanSelectCupType = can_select_cup_type !== undefined ? can_select_cup_type : currentEmp.can_select_cup_type;
 
     let updatedPasswordHash = currentEmp.password_hash;
     if (password) {
@@ -83,8 +86,8 @@ exports.updateEmployee = async (req, res, next) => {
     }
 
     const result = await db.query(
-      'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6 WHERE id = $7 RETURNING id, name, email, role, department, is_active',
-      [updatedName, updatedEmail, updatedRole, updatedDept, updatedIsActive, updatedPasswordHash, id]
+      'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6, can_select_cup_type = $7 WHERE id = $8 RETURNING id, name, email, role, department, is_active, can_select_cup_type',
+      [updatedName, updatedEmail, updatedRole, updatedDept, updatedIsActive, updatedPasswordHash, updatedCanSelectCupType, id]
     );
 
     res.json({

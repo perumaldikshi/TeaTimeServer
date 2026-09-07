@@ -60,7 +60,7 @@ const isOrderingOpen = async () => {
 
 // 1. Place order
 exports.placeOrder = async (req, res, next) => {
-  const { teaItemId, sugar_preference } = req.body;
+  const { teaItemId, sugar_preference, cup_type } = req.body;
   const quantity = 1; // Enforce quantity to 1
   const userId = req.user.id;
 
@@ -95,6 +95,14 @@ exports.placeOrder = async (req, res, next) => {
       finalSugarPref = sugar_preference;
     }
 
+    let finalCupType = null;
+    if (cup_type) {
+      if (!['paper', 'glass'].includes(cup_type)) {
+        return res.status(400).json({ error: 'Cup preference must be either paper or glass' });
+      }
+      finalCupType = cup_type;
+    }
+
     const amount = Number(item.price) * Number(quantity);
 
     // Check if the user has already ordered today (Employee can place only one order per day)
@@ -111,8 +119,8 @@ exports.placeOrder = async (req, res, next) => {
 
     // Create Order
     const insertRes = await db.query(
-      'INSERT INTO tea_orders (user_id, tea_item_id, quantity, amount, status, sugar_preference, order_date) VALUES ($1, $2, $3, $4, \'ordered\', $5, $6) RETURNING *',
-      [userId, teaItemId, quantity, amount, finalSugarPref, today]
+      'INSERT INTO tea_orders (user_id, tea_item_id, quantity, amount, status, sugar_preference, cup_type, order_date) VALUES ($1, $2, $3, $4, \'ordered\', $5, $6, $7) RETURNING *',
+      [userId, teaItemId, quantity, amount, finalSugarPref, finalCupType, today]
     );
 
     res.status(201).json({
@@ -194,7 +202,7 @@ exports.getOrderHistory = async (req, res, next) => {
     `;
     let selectQuery = `
       SELECT o.id, o.quantity, o.amount, o.status, o.order_date, o.created_at,
-             o.sugar_preference,
+             o.sugar_preference, o.cup_type,
              u.name as employee_name, u.email as employee_email, u.department,
              t.name as tea_name, t.price as unit_price, t.item_type
       FROM tea_orders o
@@ -276,7 +284,7 @@ exports.getTodayOrders = async (req, res, next) => {
     if (userRole === 'admin') {
       // Admin sees everyone's today orders
       result = await db.query(`
-        SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference,
+        SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference, o.cup_type,
                u.name as employee_name, u.department,
                t.name as tea_name, t.price as unit_price, t.item_type
         FROM tea_orders o
@@ -288,7 +296,7 @@ exports.getTodayOrders = async (req, res, next) => {
     } else {
       // Employee sees only their own today's orders
       result = await db.query(`
-        SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference,
+        SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference, o.cup_type,
                t.name as tea_name, t.price as unit_price, t.item_type
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
@@ -359,7 +367,7 @@ exports.getDashboard = async (req, res, next) => {
     } else {
       // Employee Dashboard Details: Today's order, and monthly summary
       const todayOrderRes = await db.query(`
-        SELECT o.id, o.quantity, o.amount, o.status, t.name as tea_name, o.sugar_preference
+        SELECT o.id, o.quantity, o.amount, o.status, t.name as tea_name, o.sugar_preference, o.cup_type
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.user_id = $1 AND o.order_date = $2
@@ -401,7 +409,7 @@ exports.getDashboard = async (req, res, next) => {
 // 6. Update today's order (PUT /order)
 exports.updateTodayOrder = async (req, res, next) => {
   const userId = req.user.id;
-  const { teaItemId, status, sugar_preference } = req.body;
+  const { teaItemId, status, sugar_preference, cup_type } = req.body;
   const quantity = 1; // Enforce quantity to 1
   const today = new Date().toISOString().split('T')[0];
 
@@ -458,11 +466,19 @@ exports.updateTodayOrder = async (req, res, next) => {
       finalSugarPref = null;
     }
 
+    let finalCupType = order.cup_type;
+    if (cup_type !== undefined) {
+      if (cup_type && !['paper', 'glass'].includes(cup_type)) {
+        return res.status(400).json({ error: 'Cup preference must be either paper or glass' });
+      }
+      finalCupType = cup_type;
+    }
+
     const finalAmount = Number(item.price) * Number(finalQuantity);
 
     const updateRes = await db.query(
-      'UPDATE tea_orders SET tea_item_id = $1, quantity = $2, amount = $3, sugar_preference = $4 WHERE id = $5 RETURNING *',
-      [finalTeaItemId, finalQuantity, finalAmount, finalSugarPref, order.id]
+      'UPDATE tea_orders SET tea_item_id = $1, quantity = $2, amount = $3, sugar_preference = $4, cup_type = $5 WHERE id = $6 RETURNING *',
+      [finalTeaItemId, finalQuantity, finalAmount, finalSugarPref, finalCupType, order.id]
     );
 
     res.json({
