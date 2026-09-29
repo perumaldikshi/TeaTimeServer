@@ -22,7 +22,7 @@ const getLocalTimeVal = () => {
 //   absent / other             → Auto: determined purely by configured time window
 const isOrderingOpen = async () => {
   try {
-    const settingsRes = await db.query('SELECT key, value FROM settings');
+    const settingsRes = await db.query('SELECT [key], value FROM settings');
     const settings = {};
     settingsRes.rows.forEach(r => {
       settings[r.key] = r.value;
@@ -119,7 +119,7 @@ exports.placeOrder = async (req, res, next) => {
 
     // Create Order
     const insertRes = await db.query(
-      'INSERT INTO tea_orders (user_id, tea_item_id, quantity, amount, status, sugar_preference, cup_type, order_date) VALUES ($1, $2, $3, $4, \'ordered\', $5, $6, $7) RETURNING *',
+      'INSERT INTO tea_orders (user_id, tea_item_id, quantity, amount, status, sugar_preference, cup_type, order_date) OUTPUT inserted.* VALUES ($1, $2, $3, $4, \'ordered\', $5, $6, $7)',
       [userId, teaItemId, quantity, amount, finalSugarPref, finalCupType, today]
     );
 
@@ -167,7 +167,7 @@ exports.cancelOrder = async (req, res, next) => {
 
     // Cancel Order
     const updateRes = await db.query(
-      'UPDATE tea_orders SET status = \'cancelled\' WHERE id = $1 RETURNING *',
+      'UPDATE tea_orders SET status = \'cancelled\' OUTPUT inserted.* WHERE id = $1',
       [orderId]
     );
 
@@ -194,7 +194,7 @@ exports.getOrderHistory = async (req, res, next) => {
   try {
     let queryParams = [];
     let countQuery = `
-      SELECT COUNT(o.id) 
+      SELECT COUNT(o.id) AS count
       FROM tea_orders o
       JOIN users u ON o.user_id = u.id
       JOIN tea_items t ON o.tea_item_id = t.id
@@ -244,8 +244,8 @@ exports.getOrderHistory = async (req, res, next) => {
 
     if (search && userRole === 'admin') {
       queryParams.push(`%${search}%`);
-      countQuery += ` AND (u.name ILIKE $${queryParams.length} OR u.email ILIKE $${queryParams.length} OR u.department ILIKE $${queryParams.length})`;
-      selectQuery += ` AND (u.name ILIKE $${queryParams.length} OR u.email ILIKE $${queryParams.length} OR u.department ILIKE $${queryParams.length})`;
+      countQuery += ` AND (u.name LIKE $${queryParams.length} OR u.email LIKE $${queryParams.length} OR u.department LIKE $${queryParams.length})`;
+      selectQuery += ` AND (u.name LIKE $${queryParams.length} OR u.email LIKE $${queryParams.length} OR u.department LIKE $${queryParams.length})`;
     }
 
     // Count query execution
@@ -254,7 +254,7 @@ exports.getOrderHistory = async (req, res, next) => {
     const totalPages = Math.ceil(totalOrders / limit);
 
     // Add ordering and pagination limits to select
-    selectQuery += ` ORDER BY o.created_at DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+    selectQuery += ` ORDER BY o.created_at DESC OFFSET $${queryParams.length + 2} ROWS FETCH NEXT $${queryParams.length + 1} ROWS ONLY`;
     queryParams.push(limit, offset);
 
     const ordersRes = await db.query(selectQuery, queryParams);
@@ -322,20 +322,20 @@ exports.getDashboard = async (req, res, next) => {
 
   try {
     const windowStatus = await isOrderingOpen();
-    const settingsRes = await db.query('SELECT key, value FROM settings');
+    const settingsRes = await db.query('SELECT [key], value FROM settings');
     const settings = {};
     settingsRes.rows.forEach(r => {
       settings[r.key] = r.value;
     });
 
-    const activeTeaItems = await db.query('SELECT id, name, price, item_type FROM tea_items WHERE is_available = true');
+    const activeTeaItems = await db.query('SELECT id, name, price, item_type FROM tea_items WHERE is_available = 1');
 
     if (userRole === 'admin') {
       // Admin Dashboard Details: Today's Orders item counts, total amount
       const statsRes = await db.query(`
         SELECT t.name as tea_name, 
-               COALESCE(SUM(o.quantity), 0)::int as total_qty,
-               COALESCE(SUM(o.amount), 0)::float as total_amt
+               CAST(COALESCE(SUM(o.quantity), 0) AS INT) as total_qty,
+               CAST(COALESCE(SUM(o.amount), 0) AS FLOAT) as total_amt
         FROM tea_items t
         LEFT JOIN tea_orders o ON t.id = o.tea_item_id AND o.order_date = $1 AND o.status = 'ordered'
         GROUP BY t.id, t.name
@@ -348,7 +348,7 @@ exports.getDashboard = async (req, res, next) => {
       });
 
       // Get total employee count
-      const empCountRes = await db.query('SELECT COUNT(*) FROM users WHERE role = \'employee\' AND is_active = true');
+      const empCountRes = await db.query('SELECT COUNT(*) FROM users WHERE role = \'employee\' AND is_active = 1');
 
       res.json({
         role: 'admin',
@@ -371,15 +371,14 @@ exports.getDashboard = async (req, res, next) => {
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.user_id = $1 AND o.order_date = $2
-        ORDER BY o.created_at DESC
-        LIMIT 1
+        ORDER BY o.created_at DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY
       `, [userId, today]);
 
       // Monthly spent details
       const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
       const monthlyRes = await db.query(`
-        SELECT COALESCE(COUNT(id), 0)::int as total_orders,
-               COALESCE(SUM(amount), 0)::float as total_amount
+        SELECT CAST(COALESCE(COUNT(id), 0) AS INT) as total_orders,
+               CAST(COALESCE(SUM(amount), 0) AS FLOAT) as total_amount
         FROM tea_orders
         WHERE user_id = $1 AND order_date >= $2 AND status = 'ordered'
       `, [userId, startOfMonth]);
@@ -434,7 +433,7 @@ exports.updateTodayOrder = async (req, res, next) => {
 
     if (status === 'cancelled') {
       const updateRes = await db.query(
-        'UPDATE tea_orders SET status = \'cancelled\' WHERE id = $1 RETURNING *',
+        'UPDATE tea_orders SET status = \'cancelled\' OUTPUT inserted.* WHERE id = $1',
         [order.id]
       );
       return res.json({ message: 'Order cancelled successfully', order: updateRes.rows[0] });
@@ -477,7 +476,7 @@ exports.updateTodayOrder = async (req, res, next) => {
     const finalAmount = Number(item.price) * Number(finalQuantity);
 
     const updateRes = await db.query(
-      'UPDATE tea_orders SET tea_item_id = $1, quantity = $2, amount = $3, sugar_preference = $4, cup_type = $5 WHERE id = $6 RETURNING *',
+      'UPDATE tea_orders SET tea_item_id = $1, quantity = $2, amount = $3, sugar_preference = $4, cup_type = $5 OUTPUT inserted.* WHERE id = $6',
       [finalTeaItemId, finalQuantity, finalAmount, finalSugarPref, finalCupType, order.id]
     );
 
@@ -495,7 +494,7 @@ exports.updateTodayOrder = async (req, res, next) => {
 exports.deleteOrder = async (req, res, next) => {
   const orderId = req.params.id;
   try {
-    const result = await db.query('DELETE FROM tea_orders WHERE id = $1 RETURNING *', [orderId]);
+    const result = await db.query('DELETE FROM tea_orders OUTPUT deleted.* WHERE id = $1', [orderId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });
     }

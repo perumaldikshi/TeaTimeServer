@@ -37,12 +37,12 @@ exports.sendPushNotification = async (title, body, userId = null) => {
     // 2. Fetch FCM tokens from DB
     let tokens = [];
     if (userId) {
-      const res = await db.query('SELECT fcm_token FROM users WHERE id = $1 AND is_active = true', [userId]);
+      const res = await db.query('SELECT fcm_token FROM users WHERE id = $1 AND is_active = 1', [userId]);
       if (res.rows.length > 0 && res.rows[0].fcm_token) {
         tokens.push(res.rows[0].fcm_token);
       }
     } else {
-      const res = await db.query('SELECT fcm_token FROM users WHERE fcm_token IS NOT NULL AND is_active = true');
+      const res = await db.query('SELECT fcm_token FROM users WHERE fcm_token IS NOT NULL AND is_active = 1');
       tokens = res.rows.map(r => r.fcm_token);
     }
 
@@ -80,7 +80,7 @@ exports.getUserNotifications = async (req, res, next) => {
        FROM notifications 
        WHERE user_id = $1 OR user_id IS NULL 
        ORDER BY sent_at DESC 
-       LIMIT 50`,
+       OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY`,
       [userId]
     );
     res.json({ notifications: result.rows });

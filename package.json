@@ -16,9 +16,10 @@
     "express": "^4.19.2",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
+    "mssql": "^12.7.2",
     "node-cron": "^3.0.3",
     "pdfkit": "^0.15.0",
-    "pg": "^8.11.5",
+    "pg": "^8.23.0",
     "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {

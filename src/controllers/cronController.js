@@ -51,7 +51,7 @@ exports.triggerTick = async (req, res, next) => {
   }
   try {
     // 1. Fetch current settings from DB
-    const settingsRes = await db.query('SELECT key, value FROM settings WHERE key IN (\'tea_time_start\', \'cutoff_time\', \'is_ordering_open\')');
+    const settingsRes = await db.query('SELECT [key], value FROM settings WHERE key IN (\'tea_time_start\', \'cutoff_time\', \'is_ordering_open\')');
     const settings = {};
     settingsRes.rows.forEach(r => {
       settings[r.key] = r.value;

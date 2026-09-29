@@ -10,7 +10,7 @@ exports.getEmployees = async (req, res, next) => {
 
     if (search) {
       params.push(`%${search}%`);
-      query += ` AND (name ILIKE $${params.length} OR email ILIKE $${params.length} OR department ILIKE $${params.length})`;
+      query += ` AND (name LIKE $${params.length} OR email LIKE $${params.length} OR department LIKE $${params.length})`;
     }
     if (role) {
       params.push(role);
@@ -49,7 +49,7 @@ exports.createEmployee = async (req, res, next) => {
     const cupTypeVal = can_select_cup_type !== undefined ? can_select_cup_type : false;
 
     const result = await db.query(
-      'INSERT INTO users (name, email, password_hash, role, department, can_select_cup_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, role, department, is_active, can_select_cup_type, created_at',
+      'INSERT INTO users (name, email, password_hash, role, department, can_select_cup_type) OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type, inserted.created_at VALUES ($1, $2, $3, $4, $5, $6)',
       [name, trimmedEmail, passwordHash, role, department, cupTypeVal]
     );
 
@@ -86,7 +86,7 @@ exports.updateEmployee = async (req, res, next) => {
     }
 
     const result = await db.query(
-      'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6, can_select_cup_type = $7 WHERE id = $8 RETURNING id, name, email, role, department, is_active, can_select_cup_type',
+      'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6, can_select_cup_type = $7 OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type WHERE id = $8',
       [updatedName, updatedEmail, updatedRole, updatedDept, updatedIsActive, updatedPasswordHash, updatedCanSelectCupType, id]
     );
 
@@ -125,7 +125,7 @@ exports.createTeaItem = async (req, res, next) => {
     const itemTypeVal = item_type && ['drink', 'snack'].includes(item_type) ? item_type : 'drink';
 
     const result = await db.query(
-      'INSERT INTO tea_items (name, price, is_available, item_type) VALUES ($1, $2, $3, $4) RETURNING *',
+      'INSERT INTO tea_items (name, price, is_available, item_type) OUTPUT inserted.* VALUES ($1, $2, $3, $4)',
       [name, price, availableVal, itemTypeVal]
     );
 
@@ -154,7 +154,7 @@ exports.updateTeaItem = async (req, res, next) => {
     const updatedItemType = item_type && ['drink', 'snack'].includes(item_type) ? item_type : currentItem.item_type;
 
     const result = await db.query(
-      'UPDATE tea_items SET name = $1, price = $2, is_available = $3, item_type = $4 WHERE id = $5 RETURNING *',
+      'UPDATE tea_items SET name = $1, price = $2, is_available = $3, item_type = $4 OUTPUT inserted.* WHERE id = $5',
       [updatedName, updatedPrice, updatedAvailable, updatedItemType, id]
     );
 
@@ -172,18 +172,33 @@ exports.updateSettings = async (req, res, next) => {
   const { teaTimeStart, cutoffTime, isOrderingOpen } = req.body;
   try {
     if (teaTimeStart) {
-      await db.query('INSERT INTO settings (key, value) VALUES (\'tea_time_start\', $1) ON CONFLICT (key) DO UPDATE SET value = $1', [teaTimeStart]);
+      await db.query(`
+        IF EXISTS (SELECT 1 FROM settings WHERE [key] = 'tea_time_start')
+          UPDATE settings SET value = $1 WHERE [key] = 'tea_time_start'
+        ELSE
+          INSERT INTO settings ([key], value) VALUES ('tea_time_start', $1)
+      `, [teaTimeStart]);
     }
     if (cutoffTime) {
-      await db.query('INSERT INTO settings (key, value) VALUES (\'cutoff_time\', $1) ON CONFLICT (key) DO UPDATE SET value = $1', [cutoffTime]);
+      await db.query(`
+        IF EXISTS (SELECT 1 FROM settings WHERE [key] = 'cutoff_time')
+          UPDATE settings SET value = $1 WHERE [key] = 'cutoff_time'
+        ELSE
+          INSERT INTO settings ([key], value) VALUES ('cutoff_time', $1)
+      `, [cutoffTime]);
     }
     if (isOrderingOpen !== undefined) {
       const openVal = isOrderingOpen ? 'true' : 'false';
-      await db.query('INSERT INTO settings (key, value) VALUES (\'is_ordering_open\', $1) ON CONFLICT (key) DO UPDATE SET value = $1', [openVal]);
+      await db.query(`
+        IF EXISTS (SELECT 1 FROM settings WHERE [key] = 'is_ordering_open')
+          UPDATE settings SET value = $1 WHERE [key] = 'is_ordering_open'
+        ELSE
+          INSERT INTO settings ([key], value) VALUES ('is_ordering_open', $1)
+      `, [openVal]);
     }
 
     // Return the updated settings
-    const settingsRes = await db.query('SELECT key, value FROM settings');
+    const settingsRes = await db.query('SELECT [key], value FROM settings');
     const settingsObj = {};
     settingsRes.rows.forEach(r => {
       settingsObj[r.key] = r.value;
@@ -208,12 +223,14 @@ exports.forceToggle = async (req, res, next) => {
 
     if (action === 'auto') {
       // Remove manual override — revert to time-based auto
-      await db.query('DELETE FROM settings WHERE key = \'manual_override\'');
+      await db.query('DELETE FROM settings WHERE [key] = \'manual_override\'');
     } else {
-      await db.query(
-        'INSERT INTO settings (key, value) VALUES (\'manual_override\', $1) ON CONFLICT (key) DO UPDATE SET value = $1',
-        [action]
-      );
+      await db.query(`
+        IF EXISTS (SELECT 1 FROM settings WHERE [key] = 'manual_override')
+          UPDATE settings SET value = $1 WHERE [key] = 'manual_override'
+        ELSE
+          INSERT INTO settings ([key], value) VALUES ('manual_override', $1)
+      `, [action]);
     }
 
     const label = action === 'open' ? 'Force opened' : action === 'closed' ? 'Force closed' : 'Reverted to auto (time-based)';
@@ -227,7 +244,7 @@ exports.forceToggle = async (req, res, next) => {
 exports.deleteTeaItem = async (req, res, next) => {
   const { id } = req.params;
   try {
-    const result = await db.query('DELETE FROM tea_items WHERE id = $1 RETURNING *', [id]);
+    const result = await db.query('DELETE FROM tea_items OUTPUT deleted.* WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Beverage item not found' });
     }
@@ -244,7 +261,7 @@ exports.deleteTeaItem = async (req, res, next) => {
 exports.deleteEmployee = async (req, res, next) => {
   const { id } = req.params;
   try {
-    const result = await db.query('DELETE FROM users WHERE id = $1 RETURNING id, name, email', [id]);
+    const result = await db.query('DELETE FROM users OUTPUT deleted.id, deleted.name, deleted.email WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
     }

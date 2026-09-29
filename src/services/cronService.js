@@ -9,7 +9,12 @@ const handleStartTrigger = async () => {
   console.log('[Cron/Trigger]: Executing start trigger...');
   try {
     // Open ordering window in settings
-    await db.query('INSERT INTO settings (key, value) VALUES (\'is_ordering_open\', \'true\') ON CONFLICT (key) DO UPDATE SET value = \'true\'');
+    await db.query(`
+      IF EXISTS (SELECT 1 FROM settings WHERE [key] = 'is_ordering_open')
+        UPDATE settings SET value = 'true' WHERE [key] = 'is_ordering_open'
+      ELSE
+        INSERT INTO settings ([key], value) VALUES ('is_ordering_open', 'true')
+    `);
     
     // Broadcast notifications to all employees
     await notificationService.sendPushNotification(
@@ -28,7 +33,12 @@ const handleEndTrigger = async () => {
   console.log('[Cron/Trigger]: Executing end trigger...');
   try {
     // Close ordering window in settings
-    await db.query('INSERT INTO settings (key, value) VALUES (\'is_ordering_open\', \'false\') ON CONFLICT (key) DO UPDATE SET value = \'false\'');
+    await db.query(`
+      IF EXISTS (SELECT 1 FROM settings WHERE [key] = 'is_ordering_open')
+        UPDATE settings SET value = 'false' WHERE [key] = 'is_ordering_open'
+      ELSE
+        INSERT INTO settings ([key], value) VALUES ('is_ordering_open', 'false')
+    `);
     
     // Broadcast notifications to all employees
     await notificationService.sendPushNotification(
@@ -47,7 +57,7 @@ const rescheduleJobs = async () => {
   console.log('Rescheduling automated tea timer jobs...');
   try {
     // 1. Fetch current settings from DB
-    const settingsRes = await db.query('SELECT key, value FROM settings WHERE key IN (\'tea_time_start\', \'cutoff_time\')');
+    const settingsRes = await db.query('SELECT [key], value FROM settings WHERE [key] IN (\'tea_time_start\', \'cutoff_time\')');
     const settings = {};
     settingsRes.rows.forEach(r => {
       settings[r.key] = r.value;
