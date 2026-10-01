@@ -65,7 +65,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // ── Metadata ────────────────────────────────────────────────
   doc.fillColor(textColor).fontSize(9).font(F_REG);
   doc.text(`Scope / Filter : ${filterDescription}`, startX);
-  doc.text(`Generated At   : ${new Date().toLocaleString('en-IN')}`, startX);
+  doc.text(`Generated At   : ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`, startX);
   doc.font(F_BOLD)
      .text(`Grand Total    : ${RS} ${reportData.grandTotal.toFixed(2)}`, startX);
   doc.moveDown(1.2);

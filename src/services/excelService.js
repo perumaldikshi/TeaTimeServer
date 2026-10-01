@@ -6,7 +6,7 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
 
   // Title Banner
   worksheet.addRow(['Tea Time Management System']);
-  worksheet.addRow([`Report Scope: ${filterDescription} | Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`]);
+  worksheet.addRow([`Report Scope: ${filterDescription} | Generated: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`]);
   worksheet.addRow([]); // Spacer Spacer
 
   // Side-by-side Beverages Count Summary on Columns I, J, K
