@@ -32,10 +32,10 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // ── Column layout (total usable width ≈ 495) ───────────────
   const startX = 50;
   const COL = {
-    date:     { x: startX,       w: 60  },
-    name:     { x: startX + 60,  w: 85  },
-    dept:     { x: startX + 145, w: 85  },
-    item:     { x: startX + 230, w: 90  },
+    date:     { x: startX,       w: 90  },
+    name:     { x: startX + 90,  w: 75  },
+    dept:     { x: startX + 165, w: 75  },
+    item:     { x: startX + 240, w: 80  },
     sugar:    { x: startX + 320, w: 55  },
     qty:      { x: startX + 375, w: 30  },
     price:    { x: startX + 405, w: 40  },
@@ -65,7 +65,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
   // ── Metadata ────────────────────────────────────────────────
   doc.fillColor(textColor).fontSize(9).font(F_REG);
   doc.text(`Scope / Filter : ${filterDescription}`, startX);
-  doc.text(`Generated Date : ${new Date().toLocaleDateString('en-IN')}`, startX);
+  doc.text(`Generated At   : ${new Date().toLocaleString('en-IN')}`, startX);
   doc.font(F_BOLD)
      .text(`Grand Total    : ${RS} ${reportData.grandTotal.toFixed(2)}`, startX);
   doc.moveDown(1.2);
@@ -114,7 +114,7 @@ exports.buildPDF = (reportData, filterDescription, res) => {
     // Header background
     doc.rect(startX, y, 495, 18).fill(primaryColor);
     doc.fillColor('#FFFFFF').fontSize(8.5).font(F_BOLD);
-    doc.text('Date',          COL.date.x  + 2, y + 4, { width: COL.date.w  - 2 });
+    doc.text('Date & Time',   COL.date.x  + 2, y + 4, { width: COL.date.w  - 2 });
     doc.text('Employee',      COL.name.x  + 2, y + 4, { width: COL.name.w  - 2 });
     doc.text('Department',    COL.dept.x  + 2, y + 4, { width: COL.dept.w  - 2 });
     doc.text('Item',          COL.item.x  + 2, y + 4, { width: COL.item.w  - 2 });
@@ -146,9 +146,9 @@ exports.buildPDF = (reportData, filterDescription, res) => {
         doc.rect(startX, y, 495, 16).fill(mutedBg);
       }
 
-      const orderDate = order.order_date
-        ? new Date(order.order_date).toLocaleDateString('en-IN')
-        : new Date(order.created_at).toLocaleDateString('en-IN');
+      const orderDate = order.created_at
+        ? new Date(order.created_at).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })
+        : new Date(order.order_date).toLocaleString('en-IN', { dateStyle: 'short' });
 
       let sugarText = '—';
       if (order.item_type === 'drink') {

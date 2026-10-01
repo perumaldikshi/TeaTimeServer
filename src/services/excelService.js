@@ -57,7 +57,7 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
   }
 
   const headerRow = worksheet.addRow([
-    'Order Date',
+    'Order Date & Time',
     'Employee Name',
     'Department',
     'Tea/Coffee Item',
@@ -78,7 +78,7 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
       }
 
       const row = worksheet.addRow([
-        new Date(order.order_date).toLocaleDateString(),
+        order.created_at ? new Date(order.created_at).toLocaleString() : new Date(order.order_date).toLocaleString(),
         order.employee_name || 'N/A',
         order.department || 'N/A',
         order.tea_name,
