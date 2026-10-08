@@ -8,6 +8,7 @@ const db = require('./src/config/db');
 const apiRoutes = require('./src/routes/api');
 const { initCronJobs } = require('./src/services/cronService');
 const errorHandler = require('./src/middleware/errorHandler');
+const globalAuditMiddleware = require('./src/middleware/auditMiddleware');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +24,9 @@ app.use(cors({
 // Body Parsers
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Global Audit Logging Middleware
+app.use(globalAuditMiddleware);
 
 // Swagger API Documentation
 const { swaggerUi, swaggerDocument } = require('./src/config/swagger');

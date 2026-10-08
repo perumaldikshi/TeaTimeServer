@@ -1,6 +1,7 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const auditService = require('../services/auditService');
 require('dotenv').config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'default_jwt_secret_key_antigravity';
@@ -73,7 +74,28 @@ exports.login = async (req, res, next) => {
     // Compare password
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
+      if (user.role === 'admin' || trimmedEmail.includes('admin')) {
+        await auditService.logAuditEvent({
+          req,
+          action: 'ADMIN_LOGIN_FAILED',
+          targetUserId: user.id,
+          targetUserName: user.name,
+          targetUserEmail: user.email,
+          details: { reason: 'Incorrect password attempt' }
+        });
+      }
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (user.role === 'admin') {
+      await auditService.logAuditEvent({
+        req,
+        action: 'ADMIN_LOGIN_SUCCESS',
+        targetUserId: user.id,
+        targetUserName: user.name,
+        targetUserEmail: user.email,
+        details: { note: 'Admin successfully logged in' }
+      });
     }
 
     // Generate JWT

@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const bcrypt = require('bcryptjs');
+const auditService = require('../services/auditService');
 
 // 1. Employees Management
 exports.getEmployees = async (req, res, next) => {
@@ -89,6 +90,22 @@ exports.updateEmployee = async (req, res, next) => {
       'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6, can_select_cup_type = $7 OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type WHERE id = $8',
       [updatedName, updatedEmail, updatedRole, updatedDept, updatedIsActive, updatedPasswordHash, updatedCanSelectCupType, id]
     );
+
+    // Audit log if password was changed or roles modified
+    if (password) {
+      await auditService.logAuditEvent({
+        req,
+        action: currentEmp.role === 'admin' ? 'ADMIN_PASSWORD_CHANGED' : 'USER_PASSWORD_CHANGED',
+        targetUserId: currentEmp.id,
+        targetUserName: currentEmp.name,
+        targetUserEmail: currentEmp.email,
+        details: {
+          note: `Password changed for ${currentEmp.name} (${currentEmp.email})`,
+          targetRole: currentEmp.role,
+          updatedRole: updatedRole
+        }
+      });
+    }
 
     res.json({
       message: 'Employee updated successfully',
@@ -273,3 +290,22 @@ exports.deleteEmployee = async (req, res, next) => {
     next(error);
   }
 };
+
+// 6. Get Audit Logs (Admin Only)
+exports.getAuditLogs = async (req, res, next) => {
+  const { limit = 100, search } = req.query;
+  try {
+    let query = `SELECT TOP ${parseInt(limit, 10)} * FROM audit_logs WHERE 1=1`;
+    const params = [];
+    if (search) {
+      params.push(`%${search}%`);
+      query += ` AND (action LIKE $${params.length} OR performed_by_name LIKE $${params.length} OR ip_address LIKE $${params.length})`;
+    }
+    query += ' ORDER BY id DESC';
+    const result = await db.query(query, params);
+    res.json({ logs: result.rows, total: result.rows.length });
+  } catch (error) {
+    next(error);
+  }
+};
+

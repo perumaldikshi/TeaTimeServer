@@ -34,6 +34,9 @@ router.delete('/tea-items/:id', authenticateToken, isAdmin, adminController.dele
 router.put('/settings', authenticateToken, isAdmin, adminController.updateSettings);
 router.post('/settings/force-toggle', authenticateToken, isAdmin, adminController.forceToggle);
 
+// --- AUDIT LOGS (Admin Only) ---
+router.get('/audit-logs', authenticateToken, isAdmin, adminController.getAuditLogs);
+
 // --- ORDERS ---
 router.post('/order', authenticateToken, isEmployee, orderController.placeOrder);
 router.put('/order', authenticateToken, isEmployee, orderController.updateTodayOrder); // Update or Cancel today's order
