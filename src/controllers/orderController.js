@@ -76,7 +76,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // Get item details for price calculation
-    const itemRes = await db.query('SELECT name, price, is_available, item_type FROM tea_items WHERE id = $1', [teaItemId]);
+    const itemRes = await db.query('SELECT name, price, is_available, item_type FROM tea_items WHERE id = $1 AND (is_deleted = 0 OR is_deleted IS NULL)', [teaItemId]);
     if (itemRes.rows.length === 0) {
       return res.status(404).json({ error: 'Tea item not found' });
     }

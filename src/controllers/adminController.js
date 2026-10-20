@@ -119,7 +119,7 @@ exports.updateEmployee = async (req, res, next) => {
 // 2. Tea Master Management (Prices & availability)
 exports.getTeaItems = async (req, res, next) => {
   try {
-    const result = await db.query('SELECT * FROM tea_items ORDER BY id ASC');
+    const result = await db.query('SELECT * FROM tea_items WHERE is_deleted = 0 OR is_deleted IS NULL ORDER BY id ASC');
     res.json({ teaItems: result.rows });
   } catch (error) {
     next(error);
@@ -133,17 +133,32 @@ exports.createTeaItem = async (req, res, next) => {
       return res.status(400).json({ error: 'Name and price are required' });
     }
 
-    const checkExist = await db.query('SELECT id FROM tea_items WHERE name = $1', [name]);
+    const trimmedName = name.trim();
+    const checkExist = await db.query('SELECT id, is_deleted FROM tea_items WHERE name = $1', [trimmedName]);
     if (checkExist.rows.length > 0) {
+      const existing = checkExist.rows[0];
+      if (existing.is_deleted) {
+        // If the item was previously deleted, reactivate and update it
+        const availableVal = is_available !== undefined ? (is_available === true || is_available === 1 || is_available === 'true') : true;
+        const itemTypeVal = item_type && ['drink', 'snack'].includes(item_type) ? item_type : 'drink';
+        const result = await db.query(
+          'UPDATE tea_items SET price = $1, is_available = $2, item_type = $3, is_deleted = 0 OUTPUT inserted.* WHERE id = $4',
+          [price, availableVal, itemTypeVal, existing.id]
+        );
+        return res.status(201).json({
+          message: 'Beverage restored and updated successfully',
+          teaItem: result.rows[0]
+        });
+      }
       return res.status(400).json({ error: 'Tea item with this name already exists' });
     }
 
-    const availableVal = is_available !== undefined ? is_available : true;
+    const availableVal = is_available !== undefined ? (is_available === true || is_available === 1 || is_available === 'true') : true;
     const itemTypeVal = item_type && ['drink', 'snack'].includes(item_type) ? item_type : 'drink';
 
     const result = await db.query(
-      'INSERT INTO tea_items (name, price, is_available, item_type) OUTPUT inserted.* VALUES ($1, $2, $3, $4)',
-      [name, price, availableVal, itemTypeVal]
+      'INSERT INTO tea_items (name, price, is_available, item_type, is_deleted) OUTPUT inserted.* VALUES ($1, $2, $3, $4, 0)',
+      [trimmedName, price, availableVal, itemTypeVal]
     );
 
     res.status(201).json({
@@ -165,10 +180,21 @@ exports.updateTeaItem = async (req, res, next) => {
     }
 
     const currentItem = itemRes.rows[0];
-    const updatedName = name !== undefined ? name : currentItem.name;
-    const updatedPrice = price !== undefined ? price : currentItem.price;
-    const updatedAvailable = is_available !== undefined ? is_available : currentItem.is_available;
+    const updatedName = name !== undefined ? name.trim() : currentItem.name;
+    const updatedPrice = price !== undefined ? Number(price) : currentItem.price;
+    const updatedAvailable = is_available !== undefined ? (is_available === true || is_available === 1 || is_available === 'true') : currentItem.is_available;
     const updatedItemType = item_type && ['drink', 'snack'].includes(item_type) ? item_type : currentItem.item_type;
+
+    // Check if name is taken by ANOTHER non-deleted item
+    if (updatedName && updatedName.toLowerCase() !== currentItem.name.toLowerCase()) {
+      const nameCheck = await db.query(
+        'SELECT id FROM tea_items WHERE name = $1 AND id != $2 AND (is_deleted = 0 OR is_deleted IS NULL)',
+        [updatedName, id]
+      );
+      if (nameCheck.rows.length > 0) {
+        return res.status(400).json({ error: `Beverage name "${updatedName}" already exists` });
+      }
+    }
 
     const result = await db.query(
       'UPDATE tea_items SET name = $1, price = $2, is_available = $3, item_type = $4 OUTPUT inserted.* WHERE id = $5',
@@ -261,13 +287,33 @@ exports.forceToggle = async (req, res, next) => {
 exports.deleteTeaItem = async (req, res, next) => {
   const { id } = req.params;
   try {
-    const result = await db.query('DELETE FROM tea_items OUTPUT deleted.* WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const itemRes = await db.query('SELECT * FROM tea_items WHERE id = $1', [id]);
+    if (itemRes.rows.length === 0) {
       return res.status(404).json({ error: 'Beverage item not found' });
     }
+
+    // Check if there are orders referencing this tea item
+    const orderCountRes = await db.query('SELECT COUNT(*) AS total FROM tea_orders WHERE tea_item_id = $1', [id]);
+    const orderCount = orderCountRes.rows[0]?.total ?? 0;
+
+    let deletedItem;
+    if (orderCount > 0) {
+      // If historical orders exist, soft-delete: mark is_deleted = 1 and is_available = 0
+      // This preserves order history, financial records, and reports
+      const result = await db.query(
+        'UPDATE tea_items SET is_deleted = 1, is_available = 0 OUTPUT inserted.* WHERE id = $1',
+        [id]
+      );
+      deletedItem = result.rows[0];
+    } else {
+      // If no historical orders, safely hard-delete
+      const result = await db.query('DELETE FROM tea_items OUTPUT deleted.* WHERE id = $1', [id]);
+      deletedItem = result.rows[0];
+    }
+
     res.json({
       message: 'Beverage item deleted successfully',
-      teaItem: result.rows[0]
+      teaItem: deletedItem
     });
   } catch (error) {
     next(error);
