@@ -6,7 +6,7 @@ const auditService = require('../services/auditService');
 exports.getEmployees = async (req, res, next) => {
   const { search, role, department } = req.query;
   try {
-    let query = 'SELECT id, name, email, role, department, is_active, can_select_cup_type, created_at FROM users WHERE 1=1';
+    let query = 'SELECT id, name, email, role, department, is_active, can_select_cup_type, can_view_all_orders, created_at FROM users WHERE 1=1';
     const params = [];
 
     if (search) {
@@ -31,7 +31,7 @@ exports.getEmployees = async (req, res, next) => {
 };
 
 exports.createEmployee = async (req, res, next) => {
-  const { name, email, password, role, department, can_select_cup_type } = req.body;
+  const { name, email, password, role, department, can_select_cup_type, can_view_all_orders } = req.body;
   try {
     if (!name || !email || !password || !role || !department) {
       return res.status(400).json({ error: 'All fields are required' });
@@ -47,11 +47,12 @@ exports.createEmployee = async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 10);
 
-    const cupTypeVal = can_select_cup_type !== undefined ? can_select_cup_type : false;
+    const cupTypeVal = can_select_cup_type !== undefined ? Boolean(can_select_cup_type) : false;
+    const viewOrdersVal = can_view_all_orders !== undefined ? Boolean(can_view_all_orders) : (role === 'admin');
 
     const result = await db.query(
-      'INSERT INTO users (name, email, password_hash, role, department, can_select_cup_type) OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type, inserted.created_at VALUES ($1, $2, $3, $4, $5, $6)',
-      [name, trimmedEmail, passwordHash, role, department, cupTypeVal]
+      'INSERT INTO users (name, email, password_hash, role, department, can_select_cup_type, can_view_all_orders) OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type, inserted.can_view_all_orders, inserted.created_at VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [name, trimmedEmail, passwordHash, role, department, cupTypeVal, viewOrdersVal]
     );
 
     res.status(201).json({
@@ -65,7 +66,7 @@ exports.createEmployee = async (req, res, next) => {
 
 exports.updateEmployee = async (req, res, next) => {
   const { id } = req.params;
-  const { name, email, role, department, is_active, password, can_select_cup_type } = req.body;
+  const { name, email, role, department, is_active, password, can_select_cup_type, can_view_all_orders } = req.body;
   try {
     // Check if employee exists
     const empRes = await db.query('SELECT * FROM users WHERE id = $1', [id]);
@@ -79,7 +80,8 @@ exports.updateEmployee = async (req, res, next) => {
     const updatedRole = role !== undefined ? role : currentEmp.role;
     const updatedDept = department !== undefined ? department : currentEmp.department;
     const updatedIsActive = is_active !== undefined ? is_active : currentEmp.is_active;
-    const updatedCanSelectCupType = can_select_cup_type !== undefined ? can_select_cup_type : currentEmp.can_select_cup_type;
+    const updatedCanSelectCupType = can_select_cup_type !== undefined ? Boolean(can_select_cup_type) : currentEmp.can_select_cup_type;
+    const updatedCanViewAllOrders = can_view_all_orders !== undefined ? Boolean(can_view_all_orders) : currentEmp.can_view_all_orders;
 
     let updatedPasswordHash = currentEmp.password_hash;
     if (password) {
@@ -87,8 +89,8 @@ exports.updateEmployee = async (req, res, next) => {
     }
 
     const result = await db.query(
-      'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6, can_select_cup_type = $7 OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type WHERE id = $8',
-      [updatedName, updatedEmail, updatedRole, updatedDept, updatedIsActive, updatedPasswordHash, updatedCanSelectCupType, id]
+      'UPDATE users SET name = $1, email = $2, role = $3, department = $4, is_active = $5, password_hash = $6, can_select_cup_type = $7, can_view_all_orders = $8 OUTPUT inserted.id, inserted.name, inserted.email, inserted.role, inserted.department, inserted.is_active, inserted.can_select_cup_type, inserted.can_view_all_orders WHERE id = $9',
+      [updatedName, updatedEmail, updatedRole, updatedDept, updatedIsActive, updatedPasswordHash, updatedCanSelectCupType, updatedCanViewAllOrders, id]
     );
 
     // Audit log if password was changed or roles modified

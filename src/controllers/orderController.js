@@ -281,8 +281,8 @@ exports.getTodayOrders = async (req, res, next) => {
 
   try {
     let result;
-    if (userRole === 'admin') {
-      // Admin sees everyone's today orders
+    if (userRole === 'admin' || Boolean(req.user?.can_view_all_orders)) {
+      // Admin or employee with view all orders permission sees everyone's today orders
       result = await db.query(`
         SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference, o.cup_type,
                u.name as employee_name, u.department,
@@ -331,7 +331,7 @@ exports.getDashboard = async (req, res, next) => {
     const activeTeaItems = await db.query('SELECT id, name, price, item_type FROM tea_items WHERE is_available = 1');
 
     if (userRole === 'admin') {
-      // Admin Dashboard Details: Today's Orders item counts, total amount
+      // Admin Dashboard Details: Today's Orders item counts and total amount
       const statsRes = await db.query(`
         SELECT t.name as tea_name, 
                CAST(COALESCE(SUM(o.quantity), 0) AS INT) as total_qty,
@@ -383,8 +383,37 @@ exports.getDashboard = async (req, res, next) => {
         WHERE user_id = $1 AND order_date >= $2 AND status = 'ordered'
       `, [userId, startOfMonth]);
 
+      // If this employee has volunteer access to view everyone's orders
+      let todayAllOrders = null;
+      let todayBeverageCounts = null;
+      if (Boolean(req.user?.can_view_all_orders)) {
+        const allOrdersRes = await db.query(`
+          SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference, o.cup_type,
+                 u.name as employee_name, u.department,
+                 t.name as tea_name, t.price as unit_price, t.item_type
+          FROM tea_orders o
+          JOIN users u ON o.user_id = u.id
+          JOIN tea_items t ON o.tea_item_id = t.id
+          WHERE o.order_date = $1 AND o.status = 'ordered'
+          ORDER BY o.created_at DESC
+        `, [today]);
+        todayAllOrders = allOrdersRes.rows;
+
+        const countsRes = await db.query(`
+          SELECT t.name as tea_name, 
+                 CAST(COALESCE(SUM(o.quantity), 0) AS INT) as total_qty,
+                 CAST(COALESCE(SUM(o.amount), 0) AS FLOAT) as total_amt
+          FROM tea_items t
+          JOIN tea_orders o ON t.id = o.tea_item_id AND o.order_date = $1 AND o.status = 'ordered'
+          GROUP BY t.id, t.name
+        `, [today]);
+        todayBeverageCounts = countsRes.rows;
+      }
+
       res.json({
         role: 'employee',
+        can_view_all_orders: Boolean(req.user?.can_view_all_orders),
+        can_select_cup_type: Boolean(req.user?.can_select_cup_type),
         orderingWindow: {
           isOpen: windowStatus.open,
           message: windowStatus.message,
@@ -394,6 +423,8 @@ exports.getDashboard = async (req, res, next) => {
         },
         teaItems: activeTeaItems.rows,
         todayOrder: todayOrderRes.rows.length > 0 ? todayOrderRes.rows[0] : null,
+        todayAllOrders,
+        todayBeverageCounts,
         monthlyStats: {
           totalOrders: monthlyRes.rows[0].total_orders,
           totalAmount: monthlyRes.rows[0].total_amount

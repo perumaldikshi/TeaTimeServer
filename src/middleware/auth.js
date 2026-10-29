@@ -29,7 +29,7 @@ const authenticateToken = (req, res, next) => {
 
     try {
       const db = require('../config/db');
-      const userRes = await db.query('SELECT token_version, is_active FROM users WHERE id = $1', [decoded.id]);
+      const userRes = await db.query('SELECT token_version, is_active, can_view_all_orders, can_select_cup_type FROM users WHERE id = $1', [decoded.id]);
       
       if (userRes.rows.length === 0) {
         return res.status(403).json({ error: 'User not found' });
@@ -44,7 +44,11 @@ const authenticateToken = (req, res, next) => {
         return res.status(401).json({ error: 'Session expired or logged out from all devices' });
       }
 
-      req.user = decoded;
+      req.user = {
+        ...decoded,
+        can_view_all_orders: Boolean(user.can_view_all_orders),
+        can_select_cup_type: Boolean(user.can_select_cup_type)
+      };
       next();
     } catch (dbErr) {
       console.error('Middleware database auth error:', dbErr);

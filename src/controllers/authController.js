@@ -105,7 +105,9 @@ exports.login = async (req, res, next) => {
       email: user.email,
       role: user.role,
       department: user.department,
-      token_version: user.token_version || 1
+      token_version: user.token_version || 1,
+      can_view_all_orders: Boolean(user.can_view_all_orders),
+      can_select_cup_type: Boolean(user.can_select_cup_type)
     };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
@@ -116,7 +118,9 @@ exports.login = async (req, res, next) => {
         email: user.email,
         role: user.role,
         department: user.department,
-        can_select_cup_type: user.can_select_cup_type
+        id: user.id,
+        can_select_cup_type: Boolean(user.can_select_cup_type),
+        can_view_all_orders: Boolean(user.can_view_all_orders)
       }
     });
   } catch (error) {
