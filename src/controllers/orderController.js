@@ -633,13 +633,23 @@ exports.deleteOrder = async (req, res, next) => {
     }
 
     const result = await db.query('DELETE FROM tea_orders OUTPUT deleted.* WHERE id = $1', [orderId]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Order not found' });
+    if (result.rows.length > 0) {
+      return res.json({
+        message: 'Order record deleted successfully',
+        order: result.rows[0]
+      });
     }
-    res.json({
-      message: 'Order record deleted successfully',
-      order: result.rows[0]
-    });
+
+    // Fallback: If not found in tea_orders, check shared_snack_orders by ID
+    const sharedResult = await db.query('DELETE FROM shared_snack_orders OUTPUT deleted.* WHERE id = $1', [orderId]);
+    if (sharedResult.rows.length > 0) {
+      return res.json({
+        message: 'Shared snack order record deleted successfully',
+        order: sharedResult.rows[0]
+      });
+    }
+
+    return res.status(404).json({ error: 'Order not found' });
   } catch (error) {
     next(error);
   }

@@ -68,7 +68,8 @@ const compileReportData = async (filters) => {
 
   // Also query shared snacks for the same filters
   let snackQuery = `
-    SELECT s.id, s.total_quantity AS quantity, s.amount, s.status, s.order_date, s.created_at,
+    SELECT 'snack_' + CAST(s.id AS VARCHAR) AS id, s.id AS shared_snack_id,
+           s.total_quantity AS quantity, s.amount, s.status, s.order_date, s.created_at,
            null AS sugar_preference, null AS cup_type,
            CASE 
              WHEN s.shared_user_id IS NULL THEN u1.name + ' (Self)'
@@ -76,7 +77,8 @@ const compileReportData = async (filters) => {
            END AS employee_name,
            u1.email AS employee_email,
            u1.department,
-           t.name AS tea_name, s.unit_price, t.item_type, COALESCE(t.category, 'common') AS item_category
+           t.name AS tea_name, s.unit_price, t.item_type, COALESCE(t.category, 'common') AS item_category,
+           1 AS is_shared
     FROM shared_snack_orders s
     JOIN users u1 ON s.primary_user_id = u1.id
     LEFT JOIN users u2 ON s.shared_user_id = u2.id
