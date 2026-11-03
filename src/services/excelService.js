@@ -75,6 +75,8 @@ exports.buildExcel = async (reportData, filterDescription, res) => {
       let sugarText = '—';
       if (order.item_type === 'drink') {
         sugarText = order.sugar_preference === 'with_sugar' ? 'With Sugar' : 'No Sugar';
+      } else {
+        sugarText = 'Snack';
       }
 
       const row = worksheet.addRow([

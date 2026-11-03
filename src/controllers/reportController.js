@@ -33,7 +33,7 @@ const compileReportData = async (filters) => {
     SELECT o.id, o.quantity, o.amount, o.status, o.order_date, o.created_at,
            o.sugar_preference, o.cup_type,
            u.name as employee_name, u.email as employee_email, u.department,
-           t.name as tea_name, t.price as unit_price, t.item_type
+           t.name as tea_name, t.price as unit_price, t.item_type, COALESCE(t.category, 'common') AS item_category
     FROM tea_orders o
     JOIN users u ON o.user_id = u.id
     JOIN tea_items t ON o.tea_item_id = t.id
@@ -65,6 +65,47 @@ const compileReportData = async (filters) => {
   query += ' ORDER BY o.order_date DESC, o.created_at DESC';
 
   const ordersRes = await db.query(query, params);
+
+  // Also query shared snacks for the same filters
+  let snackQuery = `
+    SELECT s.id, s.total_quantity AS quantity, s.amount, s.status, s.order_date, s.created_at,
+           null AS sugar_preference, null AS cup_type,
+           CASE 
+             WHEN s.shared_user_id IS NULL THEN u1.name + ' (Self)'
+             ELSE u1.name + ' & ' + COALESCE(u2.name, '') + ' (Shared)'
+           END AS employee_name,
+           u1.email AS employee_email,
+           u1.department,
+           t.name AS tea_name, s.unit_price, t.item_type, COALESCE(t.category, 'common') AS item_category
+    FROM shared_snack_orders s
+    JOIN users u1 ON s.primary_user_id = u1.id
+    LEFT JOIN users u2 ON s.shared_user_id = u2.id
+    JOIN tea_items t ON s.tea_item_id = t.id
+    WHERE s.status = 'ordered'
+  `;
+  const snackParams = [];
+  if (finalStartDate) {
+    snackParams.push(finalStartDate);
+    snackQuery += ` AND s.order_date >= $${snackParams.length}`;
+  }
+  if (finalEndDate) {
+    snackParams.push(finalEndDate);
+    snackQuery += ` AND s.order_date <= $${snackParams.length}`;
+  }
+  if (employeeId) {
+    snackParams.push(employeeId);
+    snackQuery += ` AND (s.primary_user_id = $${snackParams.length} OR s.shared_user_id = $${snackParams.length})`;
+  }
+  if (department) {
+    snackParams.push(department);
+    snackQuery += ` AND u1.department = $${snackParams.length}`;
+  }
+  if (teaItemId) {
+    snackParams.push(teaItemId);
+    snackQuery += ` AND s.tea_item_id = $${snackParams.length}`;
+  }
+  const snackOrdersRes = await db.query(snackQuery, snackParams);
+  const combinedOrdersList = [...ordersRes.rows, ...snackOrdersRes.rows];
   
   // Calculate Grand Total, Beverage Summary, and Sugar Preference breakdown
   let grandTotal = 0;
@@ -72,7 +113,7 @@ const compileReportData = async (filters) => {
   let withSugarCount = 0;
   let withoutSugarCount = 0;
 
-  ordersRes.rows.forEach(order => {
+  combinedOrdersList.forEach(order => {
     grandTotal += Number(order.amount);
     
     const name = order.tea_name;
@@ -107,7 +148,7 @@ const compileReportData = async (filters) => {
   const beverageSummary = Object.values(beverageSummaryMap).sort((a, b) => b.total_qty - a.total_qty);
 
   return {
-    orders: ordersRes.rows,
+    orders: combinedOrdersList,
     grandTotal,
     beverageSummary,
     sugarSummary: {
@@ -166,3 +207,5 @@ exports.downloadExcel = async (req, res, next) => {
     next(error);
   }
 };
+
+exports.compileReportData = compileReportData;

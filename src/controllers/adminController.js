@@ -129,7 +129,8 @@ exports.getTeaItems = async (req, res, next) => {
 };
 
 exports.createTeaItem = async (req, res, next) => {
-  const { name, price, is_available, item_type } = req.body;
+  const { name, price, is_available, item_type, category } = req.body;
+  const categoryVal = category && ['common', 'colleague'].includes(category.toLowerCase()) ? category.toLowerCase() : 'common';
   try {
     if (!name || price === undefined) {
       return res.status(400).json({ error: 'Name and price are required' });
@@ -144,8 +145,8 @@ exports.createTeaItem = async (req, res, next) => {
         const availableVal = is_available !== undefined ? (is_available === true || is_available === 1 || is_available === 'true') : true;
         const itemTypeVal = item_type && ['drink', 'snack'].includes(item_type) ? item_type : 'drink';
         const result = await db.query(
-          'UPDATE tea_items SET price = $1, is_available = $2, item_type = $3, is_deleted = 0 OUTPUT inserted.* WHERE id = $4',
-          [price, availableVal, itemTypeVal, existing.id]
+          'UPDATE tea_items SET price = $1, is_available = $2, item_type = $3, category = $4, is_deleted = 0 OUTPUT inserted.* WHERE id = $5',
+          [price, availableVal, itemTypeVal, categoryVal, existing.id]
         );
         return res.status(201).json({
           message: 'Beverage restored and updated successfully',
@@ -159,8 +160,8 @@ exports.createTeaItem = async (req, res, next) => {
     const itemTypeVal = item_type && ['drink', 'snack'].includes(item_type) ? item_type : 'drink';
 
     const result = await db.query(
-      'INSERT INTO tea_items (name, price, is_available, item_type, is_deleted) OUTPUT inserted.* VALUES ($1, $2, $3, $4, 0)',
-      [trimmedName, price, availableVal, itemTypeVal]
+      'INSERT INTO tea_items (name, price, is_available, item_type, category, is_deleted) OUTPUT inserted.* VALUES ($1, $2, $3, $4, $5, 0)',
+      [trimmedName, price, availableVal, itemTypeVal, categoryVal]
     );
 
     res.status(201).json({
@@ -174,7 +175,8 @@ exports.createTeaItem = async (req, res, next) => {
 
 exports.updateTeaItem = async (req, res, next) => {
   const { id } = req.params;
-  const { name, price, is_available, item_type } = req.body;
+  const { name, price, is_available, item_type, category } = req.body;
+  const categoryVal = category && ['common', 'colleague'].includes(category.toLowerCase()) ? category.toLowerCase() : 'common';
   try {
     const itemRes = await db.query('SELECT * FROM tea_items WHERE id = $1', [id]);
     if (itemRes.rows.length === 0) {
@@ -186,6 +188,7 @@ exports.updateTeaItem = async (req, res, next) => {
     const updatedPrice = price !== undefined ? Number(price) : currentItem.price;
     const updatedAvailable = is_available !== undefined ? (is_available === true || is_available === 1 || is_available === 'true') : currentItem.is_available;
     const updatedItemType = item_type && ['drink', 'snack'].includes(item_type) ? item_type : currentItem.item_type;
+    const updatedCategory = category && ['common', 'colleague'].includes(category.toLowerCase()) ? category.toLowerCase() : (currentItem.category || 'common');
 
     // Check if name is taken by ANOTHER non-deleted item
     if (updatedName && updatedName.toLowerCase() !== currentItem.name.toLowerCase()) {
@@ -199,8 +202,8 @@ exports.updateTeaItem = async (req, res, next) => {
     }
 
     const result = await db.query(
-      'UPDATE tea_items SET name = $1, price = $2, is_available = $3, item_type = $4 OUTPUT inserted.* WHERE id = $5',
-      [updatedName, updatedPrice, updatedAvailable, updatedItemType, id]
+      'UPDATE tea_items SET name = $1, price = $2, is_available = $3, item_type = $4, category = $5 OUTPUT inserted.* WHERE id = $6',
+      [updatedName, updatedPrice, updatedAvailable, updatedItemType, updatedCategory, id]
     );
 
     res.json({

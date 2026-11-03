@@ -280,34 +280,85 @@ exports.getTodayOrders = async (req, res, next) => {
   const today = new Date().toISOString().split('T')[0];
 
   try {
-    let result;
+    let ordersList = [];
+
+    // Query standard individual orders from tea_orders
     if (userRole === 'admin' || Boolean(req.user?.can_view_all_orders)) {
-      // Admin or employee with view all orders permission sees everyone's today orders
-      result = await db.query(`
+      const result = await db.query(`
         SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference, o.cup_type,
                u.name as employee_name, u.department,
-               t.name as tea_name, t.price as unit_price, t.item_type
+               t.name as tea_name, t.price as unit_price, t.item_type,
+               COALESCE(t.category, 'common') as category
         FROM tea_orders o
         JOIN users u ON o.user_id = u.id
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.order_date = $1
         ORDER BY o.created_at DESC
       `, [today]);
+      ordersList = result.rows;
     } else {
-      // Employee sees only their own today's orders
-      result = await db.query(`
+      const result = await db.query(`
         SELECT o.id, o.quantity, o.amount, o.status, o.created_at, o.sugar_preference, o.cup_type,
-               t.name as tea_name, t.price as unit_price, t.item_type
+               t.name as tea_name, t.price as unit_price, t.item_type,
+               COALESCE(t.category, 'common') as category
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.user_id = $1 AND o.order_date = $2
         ORDER BY o.created_at DESC
       `, [userId, today]);
+      ordersList = result.rows;
     }
+
+    // Query shared snack orders for today
+    let snackQuery = `
+      SELECT s.id, s.tea_item_id, s.primary_user_id, s.shared_user_id,
+             s.total_quantity, s.amount, s.status, s.created_at,
+             t.name AS snack_name, t.price AS unit_price, t.item_type,
+             COALESCE(t.category, 'colleague') as category,
+             u1.name AS primary_user_name, u1.department AS primary_user_department,
+             u2.name AS shared_user_name, u2.department AS shared_user_department
+      FROM shared_snack_orders s
+      JOIN tea_items t ON s.tea_item_id = t.id
+      JOIN users u1 ON s.primary_user_id = u1.id
+      LEFT JOIN users u2 ON s.shared_user_id = u2.id
+      WHERE s.order_date = $1 AND s.status = 'ordered'
+    `;
+    const snackParams = [today];
+
+    if (userRole !== 'admin' && !Boolean(req.user?.can_view_all_orders)) {
+      snackParams.push(userId);
+      snackQuery += ` AND (s.primary_user_id = $2 OR s.shared_user_id = $2)`;
+    }
+
+    const snacksRes = await db.query(snackQuery, snackParams);
+
+    snacksRes.rows.forEach(s => {
+      ordersList.push({
+        id: `snack_${s.id}`,
+        shared_snack_id: s.id,
+        user_id: s.primary_user_id,
+        employee_name: s.shared_user_name ? `${s.primary_user_name} & ${s.shared_user_name} (Shared)` : `${s.primary_user_name} (Self)`,
+        department: s.primary_user_department,
+        tea_name: s.snack_name,
+        quantity: s.total_quantity, // 3
+        amount: s.amount,
+        status: s.status,
+        sugar_preference: null,
+        cup_type: null,
+        item_type: 'snack',
+        category: 'colleague',
+        is_colleague_item: true,
+        is_shared: true,
+        primary_user_name: s.primary_user_name,
+        shared_user_name: s.shared_user_name,
+        shared_breakdown: `${s.primary_user_name} & ${s.shared_user_name} (${s.total_quantity} Qty)`,
+        created_at: s.created_at
+      });
+    });
 
     res.json({
       date: today,
-      orders: result.rows
+      orders: ordersList
     });
   } catch (error) {
     next(error);
@@ -328,16 +379,20 @@ exports.getDashboard = async (req, res, next) => {
       settings[r.key] = r.value;
     });
 
-    const activeTeaItems = await db.query('SELECT id, name, price, item_type FROM tea_items WHERE is_available = 1');
+    const activeTeaItems = await db.query("SELECT id, name, price, item_type, COALESCE(category, 'common') AS category FROM tea_items WHERE is_available = 1 AND (is_deleted = 0 OR is_deleted IS NULL)");
 
     if (userRole === 'admin') {
-      // Admin Dashboard Details: Today's Orders item counts and total amount
+      // Admin Dashboard Details: Today's Orders item counts and total amount (including shared snacks)
       const statsRes = await db.query(`
         SELECT t.name as tea_name, 
-               CAST(COALESCE(SUM(o.quantity), 0) AS INT) as total_qty,
-               CAST(COALESCE(SUM(o.amount), 0) AS FLOAT) as total_amt
+               CAST(COALESCE(SUM(combined.quantity), 0) AS INT) as total_qty,
+               CAST(COALESCE(SUM(combined.amount), 0) AS FLOAT) as total_amt
         FROM tea_items t
-        LEFT JOIN tea_orders o ON t.id = o.tea_item_id AND o.order_date = $1 AND o.status = 'ordered'
+        LEFT JOIN (
+          SELECT tea_item_id, quantity, amount FROM tea_orders WHERE order_date = $1 AND status = 'ordered'
+          UNION ALL
+          SELECT tea_item_id, total_quantity AS quantity, amount FROM shared_snack_orders WHERE order_date = $1 AND status = 'ordered'
+        ) combined ON t.id = combined.tea_item_id
         GROUP BY t.id, t.name
       `, [today]);
 
@@ -365,13 +420,30 @@ exports.getDashboard = async (req, res, next) => {
         activeEmployeeCount: parseInt(empCountRes.rows[0].count)
       });
     } else {
-      // Employee Dashboard Details: Today's order, and monthly summary
+      // Employee Dashboard Details: Today's order, shared snack, and monthly summary
       const todayOrderRes = await db.query(`
         SELECT o.id, o.quantity, o.amount, o.status, t.name as tea_name, o.sugar_preference, o.cup_type, o.created_at
         FROM tea_orders o
         JOIN tea_items t ON o.tea_item_id = t.id
         WHERE o.user_id = $1 AND o.order_date = $2
         ORDER BY o.created_at DESC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY
+      `, [userId, today]);
+
+      // Shared snack for today if this employee is initiator or recipient
+      const todaySharedSnackRes = await db.query(`
+        SELECT s.id, s.tea_item_id, s.primary_user_id, s.shared_user_id,
+               s.primary_quantity, s.shared_quantity, s.additional_quantity,
+               s.total_quantity, s.unit_price, s.amount, s.status, s.created_at,
+               t.name AS snack_name,
+               u1.name AS primary_user_name,
+               u2.name AS shared_user_name
+        FROM shared_snack_orders s
+        JOIN tea_items t ON s.tea_item_id = t.id
+        JOIN users u1 ON s.primary_user_id = u1.id
+        JOIN users u2 ON s.shared_user_id = u2.id
+        WHERE (s.primary_user_id = $1 OR s.shared_user_id = $1)
+          AND s.order_date = $2
+          AND s.status = 'ordered'
       `, [userId, today]);
 
       // Monthly spent details
@@ -399,12 +471,34 @@ exports.getDashboard = async (req, res, next) => {
         `, [today]);
         todayAllOrders = allOrdersRes.rows;
 
+        // Also append shared snacks to todayAllOrders for volunteer view
+        const allSharedSnacksRes = await db.query(`
+          SELECT s.id, s.total_quantity AS quantity, s.amount, s.status, s.created_at,
+                 CASE 
+                   WHEN s.shared_user_id IS NULL THEN u1.name + ' (Self)'
+                   ELSE u1.name + ' & ' + COALESCE(u2.name, '') + ' (Shared)'
+                 END AS employee_name,
+                 u1.department,
+                 t.name AS tea_name, s.unit_price, t.item_type
+          FROM shared_snack_orders s
+          JOIN tea_items t ON s.tea_item_id = t.id
+          JOIN users u1 ON s.primary_user_id = u1.id
+          LEFT JOIN users u2 ON s.shared_user_id = u2.id
+          WHERE s.order_date = $1 AND s.status = 'ordered'
+        `, [today]);
+
+        todayAllOrders = [...todayAllOrders, ...allSharedSnacksRes.rows];
+
         const countsRes = await db.query(`
           SELECT t.name as tea_name, 
-                 CAST(COALESCE(SUM(o.quantity), 0) AS INT) as total_qty,
-                 CAST(COALESCE(SUM(o.amount), 0) AS FLOAT) as total_amt
+                 CAST(COALESCE(SUM(combined.quantity), 0) AS INT) as total_qty,
+                 CAST(COALESCE(SUM(combined.amount), 0) AS FLOAT) as total_amt
           FROM tea_items t
-          JOIN tea_orders o ON t.id = o.tea_item_id AND o.order_date = $1 AND o.status = 'ordered'
+          JOIN (
+            SELECT tea_item_id, quantity, amount FROM tea_orders WHERE order_date = $1 AND status = 'ordered'
+            UNION ALL
+            SELECT tea_item_id, total_quantity AS quantity, amount FROM shared_snack_orders WHERE order_date = $1 AND status = 'ordered'
+          ) combined ON t.id = combined.tea_item_id
           GROUP BY t.id, t.name
         `, [today]);
         todayBeverageCounts = countsRes.rows;
@@ -423,6 +517,7 @@ exports.getDashboard = async (req, res, next) => {
         },
         teaItems: activeTeaItems.rows,
         todayOrder: todayOrderRes.rows.length > 0 ? todayOrderRes.rows[0] : null,
+        todaySharedSnack: todaySharedSnackRes.rows.length > 0 ? todaySharedSnackRes.rows[0] : null,
         todayAllOrders,
         todayBeverageCounts,
         monthlyStats: {
@@ -525,6 +620,18 @@ exports.updateTodayOrder = async (req, res, next) => {
 exports.deleteOrder = async (req, res, next) => {
   const orderId = req.params.id;
   try {
+    if (orderId && orderId.toString().startsWith('snack_')) {
+      const realId = orderId.toString().replace('snack_', '');
+      const result = await db.query('DELETE FROM shared_snack_orders OUTPUT deleted.* WHERE id = $1', [realId]);
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Shared snack order not found' });
+      }
+      return res.json({
+        message: 'Shared snack order record deleted successfully',
+        order: result.rows[0]
+      });
+    }
+
     const result = await db.query('DELETE FROM tea_orders OUTPUT deleted.* WHERE id = $1', [orderId]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Order not found' });

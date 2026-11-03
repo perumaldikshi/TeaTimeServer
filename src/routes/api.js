@@ -5,6 +5,7 @@ const authController = require('../controllers/authController');
 const orderController = require('../controllers/orderController');
 const adminController = require('../controllers/adminController');
 const reportController = require('../controllers/reportController');
+const snackController = require('../controllers/snackController');
 const notificationService = require('../services/notificationService');
 const cronController = require('../controllers/cronController');
 
@@ -43,6 +44,13 @@ router.put('/order', authenticateToken, isEmployee, orderController.updateTodayO
 router.put('/order/:id/cancel', authenticateToken, orderController.cancelOrder);
 router.get('/today-orders', authenticateToken, orderController.getTodayOrders);
 router.get('/history', authenticateToken, orderController.getOrderHistory);
+
+// --- SHARED SNACKS ---
+router.get('/shared-snacks/active', authenticateToken, isEmployee, snackController.getActiveSharedSnack);
+router.get('/shared-snacks/available', authenticateToken, snackController.getAvailableSnacks);
+router.get('/shared-snacks/colleagues', authenticateToken, isEmployee, snackController.getColleagues);
+router.post('/shared-snacks', authenticateToken, isEmployee, snackController.placeSharedSnackOrder);
+router.put('/shared-snacks/:id/cancel', authenticateToken, snackController.cancelSharedSnackOrder);
 
 // --- REPORTS ---
 router.get('/monthly-report', authenticateToken, isAdmin, (req, res, next) => {

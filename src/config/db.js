@@ -30,10 +30,13 @@ const config = {
     server: process.env.DB_SERVER || 'localhost', 
     database: process.env.DB_NAME || 'TeaTime',
     port: parseInt(process.env.DB_PORT, 10) || 1433,
+    connectionTimeout: 30000,
+    requestTimeout: 30000,
     options: {
         encrypt: false,
         trustServerCertificate: true,
-        useUTC: false
+        useUTC: false,
+        connectTimeout: 30000
     },
     pool: {
         max: 10,
@@ -42,23 +45,75 @@ const config = {
     }
 };
 
-const poolPromise = new sql.ConnectionPool(config)
-  .connect()
-  .then(pool => {
-    const msg = `[DB CONNECTED] Connected to MSSQL Database (${config.database} @ ${config.server}:${config.port})`;
-    console.log(msg);
-    writeDbLog(msg);
-    return pool;
-  })
-  .catch(err => {
-    const msg = `[DB CONNECTION ERROR] Bad Config / Connection Failed: ${err.message}`;
-    console.error(msg, err);
-    writeDbLog(msg);
-    process.exit(-1);
-  });
+let activePool = null;
+let isConnecting = false;
+
+const getPool = async () => {
+    if (activePool && activePool.connected) {
+        return activePool;
+    }
+
+    if (isConnecting) {
+        // Wait up to 30 seconds for ongoing connection
+        for (let i = 0; i < 60; i++) {
+            await new Promise(r => setTimeout(r, 500));
+            if (activePool && activePool.connected) return activePool;
+        }
+    }
+
+    isConnecting = true;
+    try {
+        const pool = new sql.ConnectionPool(config);
+        pool.on('error', err => {
+            const msg = `[DB POOL ERROR] ${err.message}`;
+            console.error(msg);
+            writeDbLog(msg);
+            activePool = null;
+        });
+
+        await pool.connect();
+        activePool = pool;
+        const msg = `[DB CONNECTED] Connected to MSSQL Database (${config.database} @ ${config.server}:${config.port})`;
+        console.log(msg);
+        writeDbLog(msg);
+        return activePool;
+    } catch (err) {
+        activePool = null;
+        const msg = `[DB CONNECTION WARNING] Failed to connect to MSSQL (${config.server}:${config.port}): ${err.message}`;
+        console.warn(msg);
+        writeDbLog(msg);
+        // Do NOT call process.exit(-1) so server/nodemon won't crash
+        throw err;
+    } finally {
+        isConnecting = false;
+    }
+};
+
+// Background connection attempt on startup with auto-retry
+const initConnection = (retryCount = 0) => {
+    getPool()
+        .then(() => {
+            if (retryCount > 0) {
+                console.log('[DB RECONNECTED] Database connection successfully established!');
+            }
+        })
+        .catch(err => {
+            const nextRetrySec = 5;
+            console.warn(`[DB AUTO-RECONNECT] Retrying connection in ${nextRetrySec}s (attempt ${retryCount + 1})...`);
+            console.warn(`[DB NOTE] Ensure you are connected to the network where ${config.server} is reachable.`);
+            setTimeout(() => initConnection(retryCount + 1), nextRetrySec * 1000);
+        });
+};
+
+initConnection();
+
+const poolPromise = {
+    then: (resolve, reject) => getPool().then(resolve, reject),
+    catch: (reject) => getPool().catch(reject)
+};
 
 const query = async (text, params = []) => {
-    const pool = await poolPromise;
+    const pool = await getPool();
     const request = pool.request();
     
     let mssqlText = text;
@@ -100,9 +155,8 @@ const query = async (text, params = []) => {
 
 module.exports = {
     query,
+    getPool,
     poolPromise,
     sql,
     logFilePath
 };
-
-
