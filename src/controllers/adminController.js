@@ -329,6 +329,13 @@ exports.deleteTeaItem = async (req, res, next) => {
 exports.deleteEmployee = async (req, res, next) => {
   const { id } = req.params;
   try {
+    // 1. Delete shared snack orders initiated by this employee
+    await db.query('DELETE FROM shared_snack_orders WHERE primary_user_id = $1', [id]);
+
+    // 2. Clear reference where this employee was the shared colleague partner
+    await db.query('UPDATE shared_snack_orders SET shared_user_id = NULL WHERE shared_user_id = $1', [id]);
+
+    // 3. Delete employee account (cascades tea_orders, notifications, quantity_requests)
     const result = await db.query('DELETE FROM users OUTPUT deleted.id, deleted.name, deleted.email WHERE id = $1', [id]);
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Employee not found' });
