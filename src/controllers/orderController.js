@@ -76,7 +76,7 @@ exports.placeOrder = async (req, res, next) => {
     }
 
     // Get item details for price calculation
-    const itemRes = await db.query('SELECT name, price, is_available, item_type FROM tea_items WHERE id = $1 AND (is_deleted = 0 OR is_deleted IS NULL)', [teaItemId]);
+    const itemRes = await db.query('SELECT name, price, is_available, item_type, COALESCE(category, \'common\') AS category FROM tea_items WHERE id = $1 AND (is_deleted = 0 OR is_deleted IS NULL)', [teaItemId]);
     if (itemRes.rows.length === 0) {
       return res.status(404).json({ error: 'Tea item not found' });
     }
@@ -84,6 +84,9 @@ exports.placeOrder = async (req, res, next) => {
     const item = itemRes.rows[0];
     if (!item.is_available) {
       return res.status(400).json({ error: `${item.name} is currently not available` });
+    }
+    if (item.category === 'colleague') {
+      return res.status(400).json({ error: `${item.name} is a Colleague item. Please order it from the Colleagues page.` });
     }
 
     // Validate sugar_preference: required for drink items, must be null for snacks

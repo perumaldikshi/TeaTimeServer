@@ -179,20 +179,20 @@ exports.placeSharedSnackOrder = async (req, res, next) => {
       return res.status(400).json({ error: status.message });
     }
 
-    // Validate snack item
+    // Validate colleague item
     const itemRes = await db.query(
-      'SELECT id, name, price, is_available, item_type FROM tea_items WHERE id = $1 AND (is_deleted = 0 OR is_deleted IS NULL)',
+      "SELECT id, name, price, is_available, item_type, COALESCE(category, 'common') AS category FROM tea_items WHERE id = $1 AND (is_deleted = 0 OR is_deleted IS NULL)",
       [teaItemId]
     );
     if (itemRes.rows.length === 0) {
-      return res.status(404).json({ error: 'Selected snack item not found' });
+      return res.status(404).json({ error: 'Selected item not found' });
     }
     const item = itemRes.rows[0];
     if (!item.is_available) {
       return res.status(400).json({ error: `${item.name} is currently not available` });
     }
-    if (item.item_type !== 'snack') {
-      return res.status(400).json({ error: 'Selected item is not a snack' });
+    if (item.category !== 'colleague') {
+      return res.status(400).json({ error: 'Selected item is not a colleague item' });
     }
 
     let colleague = null;
